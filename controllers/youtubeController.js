@@ -26,16 +26,35 @@ const SCOPES = [
   'https://www.googleapis.com/auth/youtube'
 ];
 
-const initiateAuth = (req, res) => {
+const initiateAuth = async (req, res) => {
   try {
-    if (!CLIENT_ID || !CLIENT_SECRET) {
+    // Try to load saved credentials first
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    let clientId = CLIENT_ID;
+    let clientSecret = CLIENT_SECRET;
+    
+    if (await fs.pathExists(credentialsPath)) {
+      const savedCredentials = await fs.readJson(credentialsPath);
+      clientId = savedCredentials.clientId;
+      clientSecret = savedCredentials.clientSecret;
+    }
+
+    if (!clientId || !clientSecret) {
       return res.status(500).json({
         success: false,
-        message: 'YouTube credentials not configured. Please set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in environment variables.'
+        message: 'YouTube credentials not configured. Please save your credentials in Settings first.',
+        requireCredentials: true
       });
     }
 
-    const authUrl = oauth2Client.generateAuthUrl({
+    // Create OAuth2 client with current credentials
+    const currentOAuth2Client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      REDIRECT_URI
+    );
+
+    const authUrl = currentOAuth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: SCOPES,
       state: req.query.state || 'default'
@@ -50,7 +69,7 @@ const initiateAuth = (req, res) => {
     logger.error('Error initiating YouTube auth:', error);
     res.status(500).json({
       success: false,
-      message: 'Error initiating YouTube authentication'
+      message: 'Error initiating YouTube authentication: ' + error.message
     });
   }
 };
@@ -60,24 +79,35 @@ const handleCallback = async (req, res) => {
     const { code, state, error } = req.query;
 
     if (error) {
-      return res.status(400).json({
-        success: false,
-        message: `Authentication error: ${error}`
-      });
+      logger.error('OAuth error:', error);
+      return res.redirect('/?auth=error&message=' + encodeURIComponent(error));
     }
 
     if (!code) {
-      return res.status(400).json({
-        success: false,
-        message: 'Authorization code not received'
-      });
+      logger.error('No authorization code received');
+      return res.redirect('/?auth=error&message=' + encodeURIComponent('No authorization code received'));
     }
 
-    // Exchange code for tokens
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
+    // Load saved credentials
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    if (!await fs.pathExists(credentialsPath)) {
+      logger.error('No saved credentials found');
+      return res.redirect('/?auth=error&message=' + encodeURIComponent('No credentials found'));
+    }
 
-    // Store tokens securely (in production, use encrypted storage)
+    const savedCredentials = await fs.readJson(credentialsPath);
+    
+    // Create OAuth2 client with saved credentials
+    const callbackOAuth2Client = new google.auth.OAuth2(
+      savedCredentials.clientId,
+      savedCredentials.clientSecret,
+      REDIRECT_URI
+    );
+
+    // Exchange code for tokens
+    const { tokens } = await callbackOAuth2Client.getToken(code);
+    
+    // Store tokens securely
     const tokenData = {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -85,14 +115,17 @@ const handleCallback = async (req, res) => {
       created_at: new Date()
     };
 
-    // Save tokens to file (in production, use secure database)
+    // Save tokens to file
+    await fs.ensureDir(path.dirname(path.join(__dirname, '../config/youtube_tokens.json')));
     await fs.writeJson(path.join(__dirname, '../config/youtube_tokens.json'), tokenData);
 
+    logger.info('YouTube authentication successful');
+    
     // Redirect to success page
     res.redirect('/?auth=success');
   } catch (error) {
     logger.error('Error handling YouTube callback:', error);
-    res.redirect('/?auth=error');
+    res.redirect('/?auth=error&message=' + encodeURIComponent(error.message));
   }
 };
 
@@ -357,11 +390,165 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000); // Run every hour
 
+const saveCredentials = async (req, res) => {
+  try {
+    const { clientId, clientSecret } = req.body;
+    
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        success: false,
+        message: 'Client ID and Client Secret are required'
+      });
+    }
+
+    // Validate Client ID format
+    if (!clientId.includes('.googleusercontent.com')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Client ID format. Should end with .googleusercontent.com'
+      });
+    }
+
+    // Save credentials to environment or config file
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    await fs.ensureDir(path.dirname(credentialsPath));
+    
+    await fs.writeJson(credentialsPath, {
+      clientId,
+      clientSecret,
+      updated_at: new Date()
+    });
+
+    // Update OAuth2 client with new credentials
+    const newOAuth2Client = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      REDIRECT_URI
+    );
+    
+    // Replace the global oauth2Client properties
+    oauth2Client._clientId = clientId;
+    oauth2Client._clientSecret = clientSecret;
+
+    logger.info('YouTube credentials saved successfully');
+    
+    res.json({
+      success: true,
+      message: 'Credentials saved successfully. You can now authenticate with YouTube.'
+    });
+  } catch (error) {
+    logger.error('Error saving credentials:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error saving credentials',
+      error: error.message
+    });
+  }
+};
+
+const getAuthStatus = async (req, res) => {
+  try {
+    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+    
+    if (!await fs.pathExists(tokenPath)) {
+      return res.json({
+        success: true,
+        authenticated: false
+      });
+    }
+
+    const tokens = await fs.readJson(tokenPath);
+    
+    // Check if tokens are valid
+    if (tokens.access_token) {
+      // Load saved credentials for OAuth client
+      const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+      if (await fs.pathExists(credentialsPath)) {
+        const savedCredentials = await fs.readJson(credentialsPath);
+        const currentOAuth2Client = new google.auth.OAuth2(
+          savedCredentials.clientId,
+          savedCredentials.clientSecret,
+          REDIRECT_URI
+        );
+        currentOAuth2Client.setCredentials(tokens);
+        
+        try {
+          const oauth2 = google.oauth2({ version: 'v2', auth: currentOAuth2Client });
+          const userInfo = await oauth2.userinfo.get();
+          
+          res.json({
+            success: true,
+            authenticated: true,
+            userInfo: {
+              email: userInfo.data.email,
+              name: userInfo.data.name,
+              picture: userInfo.data.picture
+            }
+          });
+        } catch (error) {
+          logger.warn('Failed to get user info, but tokens exist:', error.message);
+          res.json({
+            success: true,
+            authenticated: true,
+            userInfo: null
+          });
+        }
+      } else {
+        res.json({
+          success: true,
+          authenticated: false
+        });
+      }
+    } else {
+      res.json({
+        success: true,
+        authenticated: false
+      });
+    }
+  } catch (error) {
+    logger.error('Error checking auth status:', error);
+    res.json({
+      success: true,
+      authenticated: false
+    });
+  }
+};
+
+const disconnectAuth = async (req, res) => {
+  try {
+    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+    
+    // Delete token file
+    if (await fs.pathExists(tokenPath)) {
+      await fs.remove(tokenPath);
+      logger.info('YouTube tokens deleted successfully');
+    }
+    
+    // Clear OAuth2 client credentials
+    oauth2Client.setCredentials({});
+    
+    res.json({
+      success: true,
+      message: 'Successfully disconnected from YouTube'
+    });
+  } catch (error) {
+    logger.error('Error disconnecting from YouTube:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error disconnecting from YouTube',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   initiateAuth,
   handleCallback,
   uploadToYoutube,
   getUploadStatus,
+  saveCredentials,
+  getAuthStatus,
+  disconnectAuth,
   ensureValidTokens,
   uploadJobs
 }; 

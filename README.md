@@ -1,306 +1,362 @@
 # Video Downloader & YouTube Uploader
 
-Aplikasi web modern untuk mendownload video dari berbagai sumber (termasuk format .m3u8) dan mengupload otomatis ke YouTube. Dibangun dengan teknologi terbaru 2025 dan dirancang untuk berjalan di domain `prafunschool.web.id`.
+A comprehensive, modern web application for downloading videos from multiple platforms and uploading them to YouTube. Built with Node.js, Express, and a beautiful Tailwind CSS interface.
 
-## 🚀 Fitur Utama
+## ✨ Features
 
-- ✅ Download video dari berbagai format (M3U8, MP4, dll)
-- ✅ Upload otomatis ke YouTube dengan OAuth2
-- ✅ Real-time progress tracking
-- ✅ Support multiple video qualities
-- ✅ Modern dan responsive UI
-- ✅ Security headers dan rate limiting
-- ✅ Logging dan error handling yang komprehensif
-- ✅ Auto cleanup untuk file lama
+### 🎬 Video Preview & Download
+- **Video Preview**: Preview videos before downloading with metadata display
+- **Single Download**: Download individual videos with quality selection
+- **Batch Download**: Download multiple videos simultaneously
+- **Direct Download**: Download videos directly to user's computer
+- **Multi-Platform Support**: YouTube, Vimeo, Facebook, Instagram, and direct video URLs
+- **Quality Selection**: Choose from 360p, 480p, 720p, 1080p, or best available
 
-## 🛠️ Teknologi yang Digunakan
+### 📤 Upload & Management
+- **Single Upload**: Upload individual videos to YouTube
+- **Batch Upload**: Upload multiple videos at once
+- **Drag & Drop**: Intuitive file upload interface
+- **YouTube Integration**: Full OAuth2 authentication with Google
+- **Privacy Settings**: Control video visibility (Private, Unlisted, Public)
+- **Metadata Management**: Set titles, descriptions, tags, and categories
 
-### Backend
-- **Node.js** v18+ 
-- **Express.js** v4.19.2 - Web framework
-- **FFmpeg** - Video processing
-- **Google APIs** v131.0.0 - YouTube integration
-- **Winston** v3.11.0 - Logging
-- **Helmet** v7.1.0 - Security
-- **Axios** v1.6.7 - HTTP client
+### 📊 History & Progress
+- **Job History**: Complete history of all downloads and uploads
+- **Individual Delete**: Remove specific history items
+- **Clear All**: Bulk delete all history
+- **Export/Import**: Backup and restore history in JSON format
+- **Advanced Filtering**: Filter by type, status, and search by title
+- **Real-time Progress**: Live progress tracking with speedometer
+- **ETA & Speed**: Estimated time and download/upload speed display
 
-### Frontend
-- **Bootstrap** v5.3.2 - UI framework
-- **Vanilla JavaScript** - No framework dependencies
-- **Bootstrap Icons** v1.11.2 - Icon set
-- **Inter Font** - Typography
+### ⚙️ Settings & Configuration
+- **Dark Mode**: Toggle between light and dark themes
+- **Default Settings**: Configure default quality and download modes
+- **Platform Toggle**: Enable/disable specific platforms
+- **Notifications**: Browser and sound notifications for completed jobs
+- **Credentials Management**: Secure YouTube OAuth setup
 
-## 📋 Prerequisites
-
-1. **Node.js** v18 atau lebih baru
-2. **FFmpeg** terinstall di sistem
-3. **Google Cloud Console** account untuk YouTube API
-4. Domain `prafunschool.web.id` (atau sesuaikan konfigurasi)
-
-## 🔧 Instalasi
-
-### 1. Install Dependencies
-
-```bash
-# Install Node.js dependencies
-npm install
-
-# Install FFmpeg (Ubuntu/Debian)
-sudo apt update
-sudo apt install ffmpeg
-
-# Atau untuk CentOS/RHEL
-sudo yum install ffmpeg
-```
-
-### 2. Setup Environment
-
-```bash
-# Copy file environment example
-cp env.example .env
-
-# Edit file .env dengan konfigurasi Anda
-nano .env
-```
-
-### 3. Konfigurasi YouTube API
-
-1. Buka [Google Cloud Console](https://console.cloud.google.com)
-2. Buat project baru atau pilih project yang ada
-3. Enable **YouTube Data API v3**
-4. Buat **OAuth 2.0 credentials**:
-   - Application type: Web application
-   - Authorized redirect URIs: `https://prafunschool.web.id/api/auth/youtube/callback`
-5. Copy **Client ID** dan **Client Secret** ke file `.env`
-
-### 4. Struktur Direktori
-
-Aplikasi akan otomatis membuat direktori berikut:
-
-```
-├── downloads/     # File video yang didownload
-├── uploads/       # File sementara untuk upload
-├── temp/          # File temporary
-├── logs/          # Log files
-└── config/        # Konfigurasi dan tokens
-```
-
-## 🚀 Menjalankan Aplikasi
-
-### Development Mode
-
-```bash
-npm run dev
-```
-
-### Production Mode
-
-```bash
-npm start
-```
-
-Aplikasi akan berjalan di:
-- **Local**: `http://localhost:3000`
-- **Production**: `https://prafunschool.web.id:3000`
-
-## 📖 Cara Penggunaan
-
-### 1. Download Video
-
-1. Masukkan URL video (mendukung .m3u8, .mp4, dll)
-2. Pilih kualitas video (optional)
-3. Masukkan judul video (optional)
-4. Klik "Download Video"
-5. Monitor progress di bagian progress tracker
-
-### 2. Upload ke YouTube
-
-1. Pastikan sudah ada video yang berhasil didownload
-2. Klik "Autentikasi dengan YouTube" (hanya sekali)
-3. Pilih video dari dropdown
-4. Isi metadata YouTube:
-   - Judul video
-   - Deskripsi
-   - Tags
-   - Privacy setting
-5. Klik "Upload ke YouTube"
-6. Monitor progress dan dapatkan link YouTube
-
-### 3. Autentikasi YouTube
-
-Untuk upload ke YouTube, diperlukan autentikasi OAuth2:
-
-1. Klik tombol "Autentikasi dengan YouTube"
-2. Login dengan akun Google Anda
-3. Berikan izin akses ke YouTube
-4. Setelah berhasil, Anda bisa mengupload video
-
-## ⚙️ Konfigurasi
-
-### File Environment (.env)
-
-```env
-# Server
-PORT=3000
-NODE_ENV=production
-
-# YouTube API
-YOUTUBE_CLIENT_ID=your_client_id
-YOUTUBE_CLIENT_SECRET=your_client_secret
-YOUTUBE_REDIRECT_URI=https://prafunschool.web.id/api/auth/youtube/callback
-
-# Logging
-LOG_LEVEL=info
-```
-
-### Konfigurasi FFmpeg
-
-Aplikasi menggunakan FFmpeg untuk:
-- Download video M3U8
-- Konversi format video
-- Optimasi kualitas video
-
-Path FFmpeg akan otomatis dideteksi, atau bisa dikonfigurasi manual di environment.
-
-## 📊 API Endpoints
-
-### Download Endpoints
-- `POST /api/download` - Start video download
-- `GET /api/download-status/:jobId` - Get download status
-- `DELETE /api/cleanup/:jobId` - Cleanup downloaded files
-
-### YouTube Endpoints
-- `GET /api/auth/youtube` - Initiate OAuth flow
-- `GET /api/auth/youtube/callback` - OAuth callback
-- `POST /api/upload-youtube` - Upload video to YouTube
-- `GET /api/upload-status/:jobId` - Get upload status
-
-## 🔒 Keamanan
-
-Aplikasi dilengkapi dengan:
-
-- **Helmet.js** - Security headers
-- **Rate Limiting** - Mencegah abuse
-- **CORS** - Cross-origin protection
-- **Input validation** - Sanitasi input
-- **File cleanup** - Auto delete file lama
-- **Secure token storage** - OAuth token management
-
-## 📝 Logging
-
-Logs disimpan di direktori `logs/`:
-- `error.log` - Error logs
-- `combined.log` - All logs
-- Console output (development mode)
-
-## 🐛 Troubleshooting
-
-### FFmpeg Error
-```bash
-# Pastikan FFmpeg terinstall
-ffmpeg -version
-
-# Jika error, install ulang
-sudo apt reinstall ffmpeg
-```
-
-### YouTube API Error
-- Periksa quota API di Google Cloud Console
-- Pastikan credentials benar di `.env`
-- Cek redirect URI sesuai konfigurasi
-
-### Permission Error
-```bash
-# Berikan permission untuk direktori
-chmod 755 downloads uploads temp logs config
-```
-
-### Port Already in Use
-```bash
-# Ganti port di .env atau kill process
-sudo lsof -ti:3000 | xargs kill -9
-```
-
-## 📞 Support
-
-Untuk bantuan dan support:
-- Email: support@prafunschool.web.id
-- Website: https://prafunschool.web.id
-
-## 📄 License
-
-MIT License - silakan gunakan untuk proyek komersial maupun non-komersial.
-
-## 🔄 Updates
-
-Aplikasi menggunakan dependencies terbaru 2025:
-- Semua package up-to-date
-- Security patches terkini
-- Performance optimizations
-- Modern JavaScript features
+### 🎨 Modern UI/UX
+- **Tailwind CSS**: Modern, responsive design
+- **Tab Navigation**: Organized interface with Download, Upload, History, and Settings tabs
+- **Toast Notifications**: Non-intrusive status messages
+- **Mobile Responsive**: Works perfectly on all device sizes
+- **Accessibility**: Keyboard navigation and screen reader support
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+- FFmpeg
+- Python 3 (for yt-dlp)
+
+### Automatic Installation
+
+Run the automated installation script:
+
 ```bash
-# Clone repository
-git clone https://github.com/mycoderisyad/video-downloader-uploader.git
-cd video-downloader-uploader
-
-# Install dependencies
-npm install
-
-# Copy environment file
-cp env.example .env
-
-# Edit .env with your credentials
-nano .env
-
-# Run setup script
-./update-oauth.sh
-
-# Start application
-./start-app.sh
+chmod +x install-dependencies.sh
+./install-dependencies.sh
 ```
 
-## 📁 Project Structure
+This script will:
+- Install FFmpeg
+- Install Python and yt-dlp
+- Install Node.js dependencies
+- Create necessary directories
+- Verify all installations
 
+### Manual Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd video-downloader-uploader
+   ```
+
+2. **Install system dependencies**
+
+   **Ubuntu/Debian:**
+   ```bash
+   sudo apt update
+   sudo apt install -y ffmpeg python3 python3-pip
+   sudo pip3 install yt-dlp
+   ```
+
+   **macOS:**
+   ```bash
+   brew install ffmpeg python
+   pip3 install yt-dlp
+   ```
+
+3. **Install Node.js dependencies**
+   ```bash
+   npm install
+   ```
+
+4. **Create directories**
+   ```bash
+   mkdir -p downloads uploads temp logs exports batch data config
+   ```
+
+5. **Configure environment**
+   ```bash
+   cp env.example .env
+   # Edit .env with your settings
+   ```
+
+6. **Start the application**
+   ```bash
+   npm start
+   ```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file based on `env.example`:
+
+```env
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+BASE_URL=https://yourdomain.com
+
+# YouTube API (Optional - can be set via UI)
+YOUTUBE_CLIENT_ID=your_client_id
+YOUTUBE_CLIENT_SECRET=your_client_secret
+
+# Security
+SESSION_SECRET=your_random_session_secret
+
+# File Paths
+DOWNLOADS_PATH=./downloads
+UPLOADS_PATH=./uploads
+TEMP_PATH=./temp
 ```
-├── controllers/           # Business logic
-│   ├── videoController.js # Video download handling
-│   └── youtubeController.js # YouTube upload handling
-├── utils/                # Utilities
-│   └── logger.js         # Winston logging
-├── public/               # Frontend files
-│   ├── index.html        # Main UI
-│   └── app.js           # Frontend JavaScript
-├── package.json          # Dependencies
-├── server.js            # Main server
-├── .gitignore           # Git ignore rules
-├── start-app.sh         # Start script
-├── stop-app.sh          # Stop script
-└── update-oauth.sh      # OAuth setup script
+
+### YouTube OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing one
+3. Enable YouTube Data API v3
+4. Create OAuth 2.0 credentials
+5. Add your domain to authorized origins
+6. Add `https://yourdomain.com/api/auth/youtube/callback` to redirect URIs
+7. Enter credentials in the Settings tab of the application
+
+## 📖 Usage Guide
+
+### Download Videos
+
+1. **Single Download**:
+   - Navigate to the Download tab
+   - Enter video URL
+   - Select quality and download mode
+   - Click Preview to see video details (optional)
+   - Click Download to start
+
+2. **Batch Download**:
+   - Enter multiple URLs (one per line)
+   - Select quality and download mode
+   - Click "Start Batch Download"
+
+### Upload to YouTube
+
+1. **Setup Authentication**:
+   - Go to Settings tab
+   - Enter YouTube OAuth credentials
+   - Click "Authenticate with YouTube"
+   - Complete OAuth flow
+
+2. **Single Upload**:
+   - Go to Upload tab
+   - Select downloaded video or drag & drop files
+   - Fill in title, description, tags
+   - Set privacy and category
+   - Click "Upload to YouTube"
+
+3. **Batch Upload**:
+   - Select multiple completed downloads
+   - Set default privacy and tags
+   - Click "Start Batch Upload"
+
+### Manage History
+
+- **View History**: Go to History tab to see all jobs
+- **Filter**: Use type, status, and search filters
+- **Export**: Click Export to download history as JSON
+- **Import**: Click Import to restore from backup
+- **Delete**: Use individual delete buttons or "Clear All"
+
+## 🛠️ API Reference
+
+### Download Endpoints
+
+```http
+POST /api/download
+Content-Type: application/json
+
+{
+  "url": "https://example.com/video.mp4",
+  "title": "Video Title",
+  "quality": "720p",
+  "downloadMode": "server"
+}
 ```
 
-## 🔒 Security
+```http
+GET /api/download-status/:jobId
+```
 
-- Environment variables in `.env` (not committed)
-- Rate limiting and CORS protection
-- Secure file handling
-- OAuth 2.0 for YouTube API
-- SSL/HTTPS support
+```http
+GET /api/download-file/:jobId
+```
+
+### Upload Endpoints
+
+```http
+POST /api/upload-youtube
+Content-Type: application/json
+
+{
+  "jobId": "download-job-id",
+  "title": "YouTube Title",
+  "description": "Video description",
+  "tags": ["tag1", "tag2"],
+  "privacy": "private",
+  "category": "22"
+}
+```
+
+```http
+GET /api/upload-status/:jobId
+```
+
+### Utility Endpoints
+
+```http
+POST /api/preview
+Content-Type: application/json
+
+{
+  "url": "https://example.com/video.mp4"
+}
+```
+
+```http
+POST /api/save-credentials
+Content-Type: application/json
+
+{
+  "clientId": "your-client-id",
+  "clientSecret": "your-client-secret"
+}
+```
+
+```http
+GET /api/auth/status
+```
+
+## 🔒 Security Features
+
+- **Helmet.js**: Security headers
+- **Rate Limiting**: Prevents abuse
+- **Input Sanitization**: Prevents injection attacks
+- **CORS Protection**: Configurable origins
+- **File Validation**: Secure file handling
+- **OAuth2**: Secure YouTube authentication
+
+## 🎯 Supported Platforms
+
+- **YouTube**: Full support with metadata extraction
+- **Vimeo**: Video downloads and info
+- **Facebook**: Video downloads
+- **Instagram**: Video downloads
+- **Direct URLs**: MP4, M3U8, and other formats
+- **Streaming**: HLS and DASH streams
+
+## 📱 Browser Support
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14+
+- Edge 90+
+- Mobile browsers (iOS Safari, Chrome Mobile)
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **FFmpeg not found**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install ffmpeg
+   
+   # macOS
+   brew install ffmpeg
+   ```
+
+2. **yt-dlp installation fails**
+   ```bash
+   pip3 install --user yt-dlp
+   # or
+   python3 -m pip install yt-dlp
+   ```
+
+3. **Permission errors**
+   ```bash
+   chmod 755 downloads uploads temp logs
+   chown -R $USER:$USER downloads uploads temp logs
+   ```
+
+4. **YouTube authentication fails**
+   - Check OAuth credentials
+   - Verify redirect URI
+   - Ensure YouTube Data API is enabled
+
+5. **Download fails**
+   - Check internet connection
+   - Verify URL is accessible
+   - Check available disk space
+
+### Logs
+
+Application logs are stored in the `logs/` directory:
+- `app.log`: General application logs
+- `error.log`: Error logs
+- `combined.log`: All logs combined
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🙏 Acknowledgments
+
+- [FFmpeg](https://ffmpeg.org/) - Video processing
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Video downloading
+- [Google APIs](https://developers.google.com/youtube) - YouTube integration
+- [Tailwind CSS](https://tailwindcss.com/) - UI framework
+- [Express.js](https://expressjs.com/) - Web framework
+
+## 📞 Support
+
+For support, please:
+1. Check the troubleshooting section
+2. Search existing issues
+3. Create a new issue with detailed information
+4. Include logs and error messages
+
 ---
 
-**Dibuat dengan ❤️ untuk prafunschool.web.id** 
+**Made with ❤️ for the video content community** 

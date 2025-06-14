@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6">
+        <h1 class="text-2xl font-bold text-center mb-4">Frontend Test</h1>
+        <p class="text-center text-gray-600 mb-4">Testing if Tailwind CSS loads correctly</p>
+        <button id="testBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+            Click Me to Test JavaScript
+        </button>
+        <div id="result" class="mt-4 text-center text-green-600 font-medium" style="display: none;">
+            ✅ JavaScript is working!
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', function() {
+            document.getElementById('result').style.display = 'block';
+            this.textContent = 'JavaScript Works!';
+            this.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            this.classList.add('bg-green-500', 'hover:bg-green-600');
+        });
+        
+        console.log('Test script loaded successfully');
+    </script>
+</body>
+</html> 

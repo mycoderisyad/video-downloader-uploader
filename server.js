@@ -18,10 +18,18 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://www.googleapis.com"]
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdn.tailwindcss.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      mediaSrc: ["'self'", "https:", "blob:", "data:"],
+      connectSrc: ["'self'", "https://www.googleapis.com", "https://cdn.jsdelivr.net"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      objectSrc: ["'none'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      upgradeInsecureRequests: []
     }
   }
 }));
@@ -74,6 +82,14 @@ app.get('/api/upload-status/:jobId', youtubeController.getUploadStatus);
 app.delete('/api/cleanup/:jobId', videoController.cleanupFiles);
 app.get('/api/auth/youtube', youtubeController.initiateAuth);
 app.get('/api/auth/youtube/callback', youtubeController.handleCallback);
+
+// New API Routes
+app.post('/api/preview', videoController.previewVideo);
+app.get('/api/download-file/:jobId', videoController.downloadFile);
+app.post('/api/save-credentials', youtubeController.saveCredentials);
+app.get('/api/auth/status', youtubeController.getAuthStatus);
+app.post('/api/auth/disconnect', youtubeController.disconnectAuth);
+app.delete('/api/clear-all', videoController.clearAllFiles);
 
 // Error handling middleware
 app.use((error, req, res, next) => {
