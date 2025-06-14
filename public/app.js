@@ -97,10 +97,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         console.log('🎉 App fully initialized!');
         
-        // Show success toast
-        setTimeout(() => {
-            showToast('Aplikasi berhasil dimuat!', 'success');
-        }, 1000);
+        // Application loaded successfully - no toast needed
+        // setTimeout(() => {
+        //     showToast('Aplikasi berhasil dimuat!', 'success');
+        // }, 1000);
         
     } catch (error) {
         console.error('❌ Error during app initialization:', error);
@@ -191,13 +191,7 @@ function setupEventListeners() {
             exportHistoryBtn.addEventListener('click', exportHistory);
         }
         
-        const importHistoryBtn = document.getElementById('importHistoryBtn');
-        if (importHistoryBtn) {
-            importHistoryBtn.addEventListener('click', () => {
-                const importModal = document.getElementById('importModal');
-                if (importModal) importModal.classList.remove('hidden');
-            });
-        }
+
         
         const clearAllHistoryBtn = document.getElementById('clearAllHistoryBtn');
         if (clearAllHistoryBtn) {
@@ -218,42 +212,25 @@ function setupEventListeners() {
             hideProgressBtn.addEventListener('click', hideProgress);
         }
         
-        // Import modal
-        const closeImport = document.getElementById('closeImport');
-        if (closeImport) {
-            closeImport.addEventListener('click', () => {
-                const importModal = document.getElementById('importModal');
-                if (importModal) importModal.classList.add('hidden');
-            });
-        }
-        
-        const cancelImport = document.getElementById('cancelImport');
-        if (cancelImport) {
-            cancelImport.addEventListener('click', () => {
-                const importModal = document.getElementById('importModal');
-                if (importModal) importModal.classList.add('hidden');
-            });
-        }
-        
-        const confirmImport = document.getElementById('confirmImport');
-        if (confirmImport) {
-            confirmImport.addEventListener('click', confirmImport);
-        }
+
         
         // History filters
-        const historyTypeFilter = document.getElementById('historyTypeFilter');
-        if (historyTypeFilter) {
-            historyTypeFilter.addEventListener('change', filterHistory);
+        const historyFilter = document.getElementById('historyFilter');
+        if (historyFilter) {
+            historyFilter.addEventListener('change', filterHistory);
+            console.log('✅ History type filter listener added');
         }
         
-        const historyStatusFilter = document.getElementById('historyStatusFilter');
-        if (historyStatusFilter) {
-            historyStatusFilter.addEventListener('change', filterHistory);
+        const statusFilter = document.getElementById('statusFilter');
+        if (statusFilter) {
+            statusFilter.addEventListener('change', filterHistory);
+            console.log('✅ Status filter listener added');
         }
         
         const historySearch = document.getElementById('historySearch');
         if (historySearch) {
             historySearch.addEventListener('input', filterHistory);
+            console.log('✅ History search listener added');
         }
         
         // Auto-update progress
@@ -356,6 +333,7 @@ async function handleDownload(e) {
     const title = document.getElementById('videoTitle').value;
     const quality = document.getElementById('quality').value;
     const downloadMode = document.getElementById('downloadMode').value;
+    const downloaderChoice = document.getElementById('downloaderChoice').value;
     
     if (!url) {
         showToast('Video URL is required', 'error');
@@ -370,7 +348,7 @@ async function handleDownload(e) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url, title, quality, downloadMode })
+            body: JSON.stringify({ url, title, quality, downloadMode, downloaderChoice })
         });
         
         const data = await response.json();
@@ -391,7 +369,20 @@ async function handleDownload(e) {
             
             saveJobsToStorage();
             showProgress('Download Video', 'starting', 0);
-            showToast('Download started!', 'success');
+            
+            // Show platform-specific messages
+            const platform = detectPlatform(url);
+            if (downloadMode === 'direct') {
+                if (platform === 'youtube') {
+                    showToast('⚠️ YouTube Direct Download: Mungkin gagal karena bot detection. Gunakan Server Download untuk hasil terbaik.', 'warning');
+                } else if (platform === 'instagram' || platform === 'facebook') {
+                    showToast('ℹ️ Menggunakan Gallery-dl untuk platform sosial media - hasil lebih baik!', 'info');
+                } else {
+                    // showToast('Download started!', 'success'); // Removed debug notification
+                }
+            } else {
+                // showToast('Download started!', 'success'); // Removed debug notification
+            }
             
             // Reset form
             downloadForm.reset();
@@ -1015,6 +1006,7 @@ function updateJobsList() {
 function createJobElement(job) {
     const div = document.createElement('div');
     div.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4 border border-gray-200 dark:border-gray-700';
+    div.setAttribute('data-job-id', job.id); // Add data attribute for easier identification
     
     const typeIcon = job.type === 'download' ? 'bi-download' : 'bi-upload';
     const typeText = job.type === 'download' ? 'Download' : 'Upload';
@@ -1159,9 +1151,16 @@ function updateConnectionStatus(isConnected, userInfo = null) {
         authStatus.textContent = 'Ready to upload videos';
         authStatus.className = 'text-center text-sm text-green-600 dark:text-green-400';
         
-        // Store auth status
+        // Store auth status per session
         localStorage.setItem('youtube_auth_completed', 'true');
         localStorage.setItem('youtube_auth_time', new Date().toISOString());
+        
+        // Store session info if available
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session');
+        if (sessionId) {
+            localStorage.setItem('youtube_session_id', sessionId);
+        }
         
     } else {
         // Show disconnected status
@@ -1192,6 +1191,7 @@ function updateConnectionStatus(isConnected, userInfo = null) {
         // Clear auth status
         localStorage.removeItem('youtube_auth_completed');
         localStorage.removeItem('youtube_auth_time');
+        localStorage.removeItem('youtube_session_id');
     }
 }
 
@@ -1521,7 +1521,74 @@ function selectAllVideos() {
 }
 
 function filterHistory() {
-    updateJobsList();
+    console.log('🔍 Filtering history...');
+    
+    const typeFilter = document.getElementById('historyFilter')?.value || 'all';
+    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+    const searchTerm = document.getElementById('historySearch')?.value.toLowerCase() || '';
+    
+    console.log('Filter criteria:', { typeFilter, statusFilter, searchTerm });
+    
+    const jobsList = document.getElementById('jobsList');
+    if (!jobsList) return;
+    
+    // Get all jobs
+    const allJobs = [
+        ...Array.from(downloadJobs.values()).map(job => ({ ...job, type: 'download' })),
+        ...Array.from(uploadJobs.values()).map(job => ({ ...job, type: 'upload' })),
+        ...Array.from(batchJobs.values()).map(job => ({ ...job, type: job.type || 'batch' }))
+    ];
+    
+    // Apply filters
+    let filteredJobs = allJobs.filter(job => {
+        // Type filter
+        if (typeFilter !== 'all') {
+            if (typeFilter === 'download' && job.type !== 'download') return false;
+            if (typeFilter === 'upload' && job.type !== 'upload') return false;
+            if (typeFilter === 'batch' && !job.type.includes('batch')) return false;
+        }
+        
+        // Status filter
+        if (statusFilter !== 'all' && job.status !== statusFilter) return false;
+        
+        // Search filter
+        if (searchTerm && !job.title?.toLowerCase().includes(searchTerm) && 
+            !job.url?.toLowerCase().includes(searchTerm)) return false;
+        
+        return true;
+    });
+    
+    console.log(`Filtered ${filteredJobs.length} jobs from ${allJobs.length} total`);
+    
+    // Sort by start time (newest first)
+    filteredJobs.sort((a, b) => {
+        const timeA = new Date(a.startTime || 0);
+        const timeB = new Date(b.startTime || 0);
+        return timeB - timeA;
+    });
+    
+    // Clear and populate jobs list
+    jobsList.innerHTML = '';
+    
+    if (filteredJobs.length === 0) {
+        jobsList.innerHTML = `
+            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <i class="bi bi-inbox text-4xl mb-4"></i>
+                <p>No jobs found matching your criteria</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Create job elements
+    filteredJobs.forEach(job => {
+        const jobElement = createJobElement(job);
+        if (jobElement) {
+            jobsList.appendChild(jobElement);
+        }
+    });
+    
+    console.log('✅ History filtered and updated');
 }
 
 function exportHistory() {
@@ -1552,51 +1619,7 @@ function exportHistory() {
     showToast('History exported successfully!', 'success');
 }
 
-function confirmImport() {
-    const fileInput = document.getElementById('importFile');
-    const file = fileInput.files[0];
-    
-    if (!file) {
-        showToast('Please select a file to import', 'error');
-        return;
-    }
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const importData = JSON.parse(e.target.result);
-            
-            if (importData.jobs && Array.isArray(importData.jobs)) {
-                importData.jobs.forEach(job => {
-                    if (job.type === 'download') {
-                        downloadJobs.set(job.id, job);
-                    } else if (job.type === 'upload') {
-                        uploadJobs.set(job.id, job);
-                    } else if (job.type.startsWith('batch')) {
-                        batchJobs.set(job.id, job);
-                    }
-                });
-                
-                saveJobsToStorage();
-                updateJobsList();
-                updateDownloadJobSelect();
-                updateBatchVideoList();
-                
-                showToast(`Imported ${importData.jobs.length} jobs successfully!`, 'success');
-            } else {
-                showToast('Invalid file format', 'error');
-            }
-        } catch (error) {
-            console.error('Import error:', error);
-            showToast('Error importing file', 'error');
-        }
-        
-        document.getElementById('importModal').classList.add('hidden');
-        fileInput.value = '';
-    };
-    
-    reader.readAsText(file);
-}
+
 
 async function clearAllHistory() {
     if (!confirm('Are you sure you want to clear all history and delete all files from server? This action cannot be undone.')) {
@@ -1652,9 +1675,10 @@ async function clearAllHistory() {
 async function saveCredentials() {
     const clientId = document.getElementById('clientId').value;
     const clientSecret = document.getElementById('clientSecret').value;
+    const redirectUri = document.getElementById('redirectUri').value;
     
-    if (!clientId || !clientSecret) {
-        showToast('Please enter both Client ID and Client Secret', 'error');
+    if (!clientId || !clientSecret || !redirectUri) {
+        showToast('Please enter Client ID, Client Secret, and Redirect URI', 'error');
         return;
     }
     
@@ -1664,7 +1688,7 @@ async function saveCredentials() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ clientId, clientSecret })
+            body: JSON.stringify({ clientId, clientSecret, redirectUri })
         });
         
         const data = await response.json();
@@ -1801,6 +1825,19 @@ window.removeToast = removeToast;
 window.deleteJob = async function(jobId, jobType) {
     console.log('🗑️ deleteJob called with:', { jobId, jobType });
     
+    // First check if job exists locally
+    const job = downloadJobs.get(jobId) || uploadJobs.get(jobId) || batchJobs.get(jobId);
+    if (!job) {
+        console.log('Job not found locally, removing from UI');
+        // Remove the job element from UI if it exists
+        const jobElement = document.querySelector(`[data-job-id="${jobId}"]`);
+        if (jobElement) {
+            jobElement.remove();
+        }
+        showToast('Job sudah tidak ada', 'warning');
+        return;
+    }
+    
     if (!confirm('Apakah Anda yakin ingin menghapus job ini? File yang sudah didownload juga akan dihapus.')) {
         console.log('Delete cancelled by user');
         return;
@@ -1816,32 +1853,56 @@ window.deleteJob = async function(jobId, jobType) {
         
         console.log('Server response status:', response.status);
         
-        const data = await response.json();
-        console.log('Server response data:', data);
-        
-        if (data.success) {
-            // Remove from local storage
-            if (jobType === 'download') {
-                const deleted = downloadJobs.delete(jobId);
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Server response data:', data);
+            
+            // Remove from local storage regardless of server response
+            let deleted = false;
+            if (downloadJobs.has(jobId)) {
+                deleted = downloadJobs.delete(jobId);
                 console.log('Deleted from downloadJobs:', deleted);
-            } else if (jobType === 'upload') {
-                const deleted = uploadJobs.delete(jobId);
+            }
+            if (uploadJobs.has(jobId)) {
+                deleted = uploadJobs.delete(jobId);
                 console.log('Deleted from uploadJobs:', deleted);
+            }
+            if (batchJobs.has(jobId)) {
+                deleted = batchJobs.delete(jobId);
+                console.log('Deleted from batchJobs:', deleted);
             }
             
             saveJobsToStorage();
-            updateJobsList();
+            filterHistory(); // Use filterHistory instead of updateJobsList
             updateDownloadJobSelect();
             
             showToast('Job berhasil dihapus!', 'success');
             console.log('✅ Job deleted successfully');
         } else {
-            showToast(data.message || 'Gagal menghapus job', 'error');
-            console.error('❌ Server returned error:', data.message);
+            // Even if server fails, remove from local storage
+            downloadJobs.delete(jobId);
+            uploadJobs.delete(jobId);
+            batchJobs.delete(jobId);
+            
+            saveJobsToStorage();
+            filterHistory();
+            updateDownloadJobSelect();
+            
+            showToast('Job dihapus dari local (server error)', 'warning');
         }
     } catch (error) {
         console.error('❌ Error deleting job:', error);
-        showToast('Error menghapus job: ' + error.message, 'error');
+        
+        // Fallback: remove from local storage anyway
+        downloadJobs.delete(jobId);
+        uploadJobs.delete(jobId);
+        batchJobs.delete(jobId);
+        
+        saveJobsToStorage();
+        filterHistory();
+        updateDownloadJobSelect();
+        
+        showToast('Job dihapus dari local (network error)', 'warning');
     }
 };
 
@@ -1849,21 +1910,55 @@ window.downloadJobFile = async function(jobId) {
     console.log('🔽 downloadJobFile called with jobId:', jobId);
     
     try {
-        showToast('Memulai download file...', 'info');
-        
-        // Get job details
-        const job = downloadJobs.get(jobId) || uploadJobs.get(jobId);
+        // Get job details from all possible sources
+        const job = downloadJobs.get(jobId) || uploadJobs.get(jobId) || batchJobs.get(jobId);
         console.log('Job details:', job);
         
         if (!job) {
-            showToast('Job tidak ditemukan!', 'error');
-            return;
+            console.log('Job not found locally, checking server...');
+            
+            // Try to get job status from server
+            try {
+                const response = await fetch(`${API_BASE}/api/download-status/${jobId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.job) {
+                        console.log('Job found on server:', data.job);
+                        // Update local storage with server data
+                        const serverJob = {
+                            ...data.job,
+                            id: jobId,
+                            type: 'download'
+                        };
+                        downloadJobs.set(jobId, serverJob);
+                        saveJobsToStorage();
+                        
+                        // Continue with download
+                        if (serverJob.status !== 'completed') {
+                            showToast('Job belum selesai!', 'warning');
+                            return;
+                        }
+                    } else {
+                        showToast('Job tidak ditemukan di server!', 'error');
+                        return;
+                    }
+                } else {
+                    showToast('Job tidak ditemukan!', 'error');
+                    return;
+                }
+            } catch (serverError) {
+                console.error('Error checking server:', serverError);
+                showToast('Job tidak ditemukan!', 'error');
+                return;
+            }
         }
         
         if (job.status !== 'completed') {
             showToast('Job belum selesai!', 'warning');
             return;
         }
+        
+        showToast('Memulai download file...', 'info');
         
         // Create a temporary link to download the file
         const link = document.createElement('a');
@@ -1884,13 +1979,13 @@ window.downloadJobFile = async function(jobId) {
     }
 };
 
-// Test functions - for debugging
+// Test functions - for debugging (disabled in production)
 window.testApp = function() {
     console.log('🧪 Testing app functionality...');
     
-    // Test toast
+    // Test toast - disabled in production
     console.log('Testing toast...');
-    showToast('Test toast berhasil!', 'success');
+    // showToast('Test toast berhasil!', 'success');
     
     // Test tab navigation
     console.log('Testing tab navigation...');
@@ -1929,7 +2024,7 @@ window.testDelete = function() {
     // Check if there are any jobs to delete
     if (downloadJobs.size === 0 && uploadJobs.size === 0) {
         console.log('No jobs found to test delete');
-        showToast('No jobs found to test delete', 'warning');
+        // showToast('No jobs found to test delete', 'warning');
         return;
     }
     
@@ -1967,7 +2062,7 @@ window.testDownload = function() {
     
     if (completedJobs.length === 0) {
         console.log('No completed jobs found to test download');
-        showToast('No completed jobs found to test download', 'warning');
+        // showToast('No completed jobs found to test download', 'warning');
         return;
     }
     
@@ -2013,17 +2108,34 @@ window.testButtons = function() {
     console.log('✅ Button test completed - check console for results');
 };
 
-// Auto-test after initialization
-setTimeout(() => {
-    if (window.testApp) {
-        console.log('🔧 Running auto-test...');
-        window.testApp();
-    }
-}, 2000);
+// Auto-test disabled in production
+// setTimeout(() => {
+//     if (window.testApp) {
+//         console.log('🔧 Running auto-test...');
+//         window.testApp();
+//     }
+// }, 2000);
 
 // Utility functions
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+function detectPlatform(url) {
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        return 'youtube';
+    } else if (url.includes('instagram.com')) {
+        return 'instagram';
+    } else if (url.includes('facebook.com') || url.includes('fb.watch')) {
+        return 'facebook';
+    } else if (url.includes('vimeo.com')) {
+        return 'vimeo';
+    } else if (url.includes('tiktok.com')) {
+        return 'tiktok';
+    } else if (url.includes('twitter.com') || url.includes('x.com')) {
+        return 'twitter';
+    }
+    return 'other';
 }
 
 function formatDate(dateString) {

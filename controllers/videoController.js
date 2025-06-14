@@ -29,7 +29,7 @@ const platformPatterns = {
 
 const downloadVideo = async (req, res) => {
   try {
-    const { url, title, quality = 'best', downloadMode = 'server', batchId } = req.body;
+    const { url, title, quality = 'best', downloadMode = 'server', downloaderChoice = 'auto', batchId } = req.body;
     
     if (!url) {
       return res.status(400).json({
@@ -78,7 +78,7 @@ const downloadVideo = async (req, res) => {
     });
 
     // Start download process asynchronously
-    startDownload(jobId, url, outputPath, quality, downloadMode, platform);
+    startDownload(jobId, url, outputPath, quality, downloadMode, platform, downloaderChoice);
 
   } catch (error) {
     logger.error('Error in downloadVideo:', error);
@@ -90,17 +90,17 @@ const downloadVideo = async (req, res) => {
   }
 };
 
-const startDownload = async (jobId, url, outputPath, quality, downloadMode, platform) => {
+const startDownload = async (jobId, url, outputPath, quality, downloadMode, platform, downloaderChoice = 'auto') => {
   try {
     updateJobStatus(jobId, 'downloading', 0);
     
     if (downloadMode === 'direct') {
       // Direct download mode - stream directly to user
-      await handleDirectDownload(jobId, url, quality);
+      await handleDirectDownload(jobId, url, quality, downloaderChoice);
     } else {
       // Server download mode - save to server first
       if (platform) {
-        await downloadFromPlatform(jobId, url, outputPath, quality, platform);
+        await downloadFromPlatform(jobId, url, outputPath, quality, platform, downloaderChoice);
       } else {
         // Check if URL is m3u8 or other streaming format
         const isM3u8 = url.includes('.m3u8') || url.includes('m3u8');
@@ -119,13 +119,361 @@ const startDownload = async (jobId, url, outputPath, quality, downloadMode, plat
   }
 };
 
-const downloadFromPlatform = async (jobId, url, outputPath, quality, platform) => {
-  // For now, we'll use yt-dlp for platform downloads
-  // This requires yt-dlp to be installed on the system
+const downloadFromPlatform = async (jobId, url, outputPath, quality, platform, downloaderChoice = 'auto') => {
+  const { spawn } = require('child_process');
+  
+  // Choose downloader based on user selection or auto-detect
+  let downloader;
+  if (downloaderChoice === 'auto') {
+    downloader = getDownloaderForPlatform(platform);
+  } else {
+    downloader = downloaderChoice;
+  }
+  
+  logger.info(`Using downloader: ${downloader} for platform: ${platform}`);
+  
+  try {
+    switch (downloader) {
+      case 'youtube-dl-exec':
+        return await downloadWithYoutubeDlExec(jobId, url, outputPath, quality, platform);
+      case 'gallery-dl':
+        return await downloadWithGalleryDl(jobId, url, outputPath, quality);
+      case 'you-get':
+        return await downloadWithYouGet(jobId, url, outputPath, quality);
+      case 'youtube-dl':
+        return await downloadWithYoutubeDl(jobId, url, outputPath, quality);
+      case 'yt-dlp':
+      default:
+        return await downloadWithYtDlp(jobId, url, outputPath, quality, platform);
+    }
+  } catch (error) {
+    // If selected downloader fails, try fallback for social media platforms
+    if (downloaderChoice !== 'auto' && (platform === 'instagram' || platform === 'facebook')) {
+      logger.warn(`${downloader} failed, trying fallback for ${platform}`);
+      try {
+        const fallbackDownloader = downloader === 'gallery-dl' ? 'yt-dlp' : 'gallery-dl';
+        logger.info(`Trying fallback downloader: ${fallbackDownloader}`);
+        
+        if (fallbackDownloader === 'gallery-dl') {
+          return await downloadWithGalleryDl(jobId, url, outputPath, quality);
+        } else {
+          return await downloadWithYtDlp(jobId, url, outputPath, quality, platform);
+        }
+      } catch (fallbackError) {
+        logger.error(`Fallback downloader also failed: ${fallbackError.message}`);
+        throw error; // Throw original error
+      }
+    } else {
+      throw error;
+    }
+  }
+};
+
+const getDownloaderForPlatform = (platform) => {
+  switch (platform) {
+    case 'instagram':
+    case 'facebook':
+      return 'gallery-dl'; // Better for social media
+    case 'youtube':
+    case 'vimeo':
+    default:
+      return 'yt-dlp'; // Keep yt-dlp for YouTube and others
+  }
+};
+
+const downloadWithGalleryDl = async (jobId, url, outputPath, quality) => {
   const { spawn } = require('child_process');
   
   return new Promise((resolve, reject) => {
     const args = [
+      '--write-info-json',
+      '--no-skip',
+      '--output', outputPath.replace('.mp4', '.%(ext)s'),
+      url
+    ];
+    
+    logger.info(`Starting gallery-dl with args: ${args.join(' ')}`);
+    const galleryDl = spawn('gallery-dl', args);
+    
+    let hasOutput = false;
+    let errorOutput = '';
+    
+    galleryDl.stdout.on('data', (data) => {
+      hasOutput = true;
+      const output = data.toString();
+      logger.info(`gallery-dl stdout: ${output}`);
+      
+      // Parse progress if available
+      if (output.includes('%')) {
+        const progressMatch = output.match(/(\d+(?:\.\d+)?)%/);
+        if (progressMatch) {
+          const progress = parseFloat(progressMatch[1]);
+          updateJobStatus(jobId, 'downloading', progress);
+        }
+      }
+    });
+    
+    galleryDl.stderr.on('data', (data) => {
+      const stderr = data.toString();
+      errorOutput += stderr;
+      logger.warn(`gallery-dl stderr: ${stderr}`);
+      
+      // Check for specific errors
+      if (stderr.includes('HTTP Error 404')) {
+        updateJobStatus(jobId, 'error', 0, 'Video tidak ditemukan atau telah dihapus');
+      } else if (stderr.includes('Private')) {
+        updateJobStatus(jobId, 'error', 0, 'Video bersifat private');
+      } else if (stderr.includes('Login required')) {
+        updateJobStatus(jobId, 'error', 0, 'Video memerlukan login');
+      }
+    });
+    
+    galleryDl.on('close', (code) => {
+      logger.info(`gallery-dl process closed with code: ${code}`);
+      
+      if (code === 0) {
+        updateJobStatus(jobId, 'completed', 100);
+        resolve();
+      } else {
+        let errorMessage = 'Download gagal dengan gallery-dl';
+        
+        if (errorOutput.includes('404')) {
+          errorMessage = 'Video tidak ditemukan atau telah dihapus';
+        } else if (errorOutput.includes('Private')) {
+          errorMessage = 'Video bersifat private dan tidak dapat didownload';
+        } else if (errorOutput.includes('Login')) {
+          errorMessage = 'Video memerlukan login untuk diakses';
+        } else {
+          errorMessage = 'Download gagal. Coba lagi atau periksa URL.';
+        }
+        
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    });
+    
+    galleryDl.on('error', (error) => {
+      logger.error(`gallery-dl spawn error: ${error.message}`);
+      const errorMessage = 'gallery-dl tidak dapat dijalankan. Pastikan gallery-dl sudah terinstall.';
+      updateJobStatus(jobId, 'error', 0, errorMessage);
+      reject(new Error(errorMessage));
+    });
+    
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (!hasOutput) {
+        galleryDl.kill();
+        const errorMessage = 'Download timeout dengan gallery-dl.';
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    }, 300000);
+  });
+};
+
+const downloadWithYouGet = async (jobId, url, outputPath, quality) => {
+  const { spawn } = require('child_process');
+  
+  return new Promise((resolve, reject) => {
+    const args = [
+      '--output-dir', path.dirname(outputPath),
+      '--output-filename', path.basename(outputPath, '.mp4'),
+      '--format', 'mp4',
+      url
+    ];
+    
+    logger.info(`Starting you-get with args: ${args.join(' ')}`);
+    const youget = spawn('you-get', args);
+    
+    let hasOutput = false;
+    let errorOutput = '';
+    
+    youget.stdout.on('data', (data) => {
+      hasOutput = true;
+      const output = data.toString();
+      logger.info(`you-get stdout: ${output}`);
+      
+      // Parse progress if available
+      if (output.includes('%')) {
+        const progressMatch = output.match(/(\d+(?:\.\d+)?)%/);
+        if (progressMatch) {
+          const progress = parseFloat(progressMatch[1]);
+          updateJobStatus(jobId, 'downloading', progress);
+        }
+      }
+    });
+    
+    youget.stderr.on('data', (data) => {
+      const stderr = data.toString();
+      errorOutput += stderr;
+      logger.warn(`you-get stderr: ${stderr}`);
+    });
+    
+    youget.on('close', (code) => {
+      logger.info(`you-get process closed with code: ${code}`);
+      
+      if (code === 0) {
+        updateJobStatus(jobId, 'completed', 100);
+        resolve();
+      } else {
+        const errorMessage = `you-get failed with code ${code}`;
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    });
+    
+    youget.on('error', (error) => {
+      logger.error(`you-get spawn error: ${error.message}`);
+      const errorMessage = 'you-get tidak dapat dijalankan. Pastikan you-get sudah terinstall.';
+      updateJobStatus(jobId, 'error', 0, errorMessage);
+      reject(new Error(errorMessage));
+    });
+    
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (!hasOutput) {
+        youget.kill();
+        const errorMessage = 'you-get timeout.';
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    }, 300000);
+  });
+};
+
+const downloadWithYoutubeDl = async (jobId, url, outputPath, quality) => {
+  const { spawn } = require('child_process');
+  
+  return new Promise((resolve, reject) => {
+    const args = [
+      '--no-warnings',
+      '--no-check-certificate',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      '--format', getYtDlpFormat(quality),
+      '--output', outputPath.replace('.mp4', '.%(ext)s'),
+      '--merge-output-format', 'mp4',
+      url
+    ];
+    
+    logger.info(`Starting youtube-dl fallback with args: ${args.join(' ')}`);
+    const youtubeDl = spawn('youtube-dl', args);
+    
+    let hasOutput = false;
+    let errorOutput = '';
+    
+    youtubeDl.stdout.on('data', (data) => {
+      hasOutput = true;
+      const output = data.toString();
+      logger.info(`youtube-dl stdout: ${output}`);
+      
+      // Parse progress if available
+      if (output.includes('%')) {
+        const progressMatch = output.match(/(\d+(?:\.\d+)?)%/);
+        if (progressMatch) {
+          const progress = parseFloat(progressMatch[1]);
+          updateJobStatus(jobId, 'downloading', progress);
+        }
+      }
+    });
+    
+    youtubeDl.stderr.on('data', (data) => {
+      const stderr = data.toString();
+      errorOutput += stderr;
+      logger.warn(`youtube-dl stderr: ${stderr}`);
+    });
+    
+    youtubeDl.on('close', (code) => {
+      logger.info(`youtube-dl process closed with code: ${code}`);
+      
+      if (code === 0) {
+        updateJobStatus(jobId, 'completed', 100);
+        resolve();
+      } else {
+        const errorMessage = `youtube-dl fallback failed with code ${code}`;
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    });
+    
+    youtubeDl.on('error', (error) => {
+      logger.error(`youtube-dl spawn error: ${error.message}`);
+      const errorMessage = 'youtube-dl tidak dapat dijalankan. Pastikan youtube-dl sudah terinstall.';
+      updateJobStatus(jobId, 'error', 0, errorMessage);
+      reject(new Error(errorMessage));
+    });
+    
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (!hasOutput) {
+        youtubeDl.kill();
+        const errorMessage = 'youtube-dl timeout.';
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    }, 300000);
+  });
+};
+
+const downloadWithYoutubeDlExec = async (jobId, url, outputPath, quality, platform) => {
+  const youtubedl = require('youtube-dl-exec');
+  
+  try {
+    const flags = {
+      noWarnings: true,
+      noCheckCertificates: true,
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      referer: url,
+      extractorRetries: 3,
+      fragmentRetries: 3,
+      retrySleep: 1,
+      format: getYtDlpFormat(quality),
+      output: outputPath.replace('.mp4', '.%(ext)s'),
+      mergeOutputFormat: 'mp4'
+    };
+
+    // For YouTube, add additional anti-bot measures
+    if (platform === 'youtube') {
+      flags.sleepInterval = 1;
+      flags.maxSleepInterval = 3;
+      flags.cookiesFromBrowser = 'chrome';
+      flags.extractorArgs = 'youtube:player_client=android';
+    }
+
+    logger.info(`Starting youtube-dl-exec with flags: ${JSON.stringify(flags)}`);
+    
+    // Use youtube-dl-exec with progress tracking
+    const result = await youtubedl(url, flags);
+    
+    updateJobStatus(jobId, 'completed', 100);
+    logger.info(`youtube-dl-exec completed successfully for job ${jobId}`);
+    
+  } catch (error) {
+    logger.error(`youtube-dl-exec error for job ${jobId}:`, error);
+    
+    let errorMessage = 'Download gagal dengan youtube-dl-exec';
+    if (error.message.includes('Sign in to confirm you\'re not a bot')) {
+      errorMessage = 'YouTube mendeteksi aktivitas bot. Coba downloader lain atau gunakan Server Download.';
+    } else if (error.message.includes('Video unavailable')) {
+      errorMessage = 'Video tidak tersedia atau telah dihapus';
+    }
+    
+    updateJobStatus(jobId, 'error', 0, errorMessage);
+    throw new Error(errorMessage);
+  }
+};
+
+const downloadWithYtDlp = async (jobId, url, outputPath, quality, platform) => {
+  const { spawn } = require('child_process');
+  
+  return new Promise((resolve, reject) => {
+    const args = [
+      '--no-warnings',
+      '--no-check-certificate',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      '--referer', url,
+      '--extractor-retries', '3',
+      '--fragment-retries', '3',
+      '--retry-sleep', '1',
       '--format', getYtDlpFormat(quality),
       '--output', outputPath.replace('.mp4', '.%(ext)s'),
       '--merge-output-format', 'mp4',
@@ -133,29 +481,129 @@ const downloadFromPlatform = async (jobId, url, outputPath, quality, platform) =
       url
     ];
     
+    // For YouTube, add additional anti-bot measures
+    if (platform === 'youtube') {
+      args.push('--sleep-interval', '1');
+      args.push('--max-sleep-interval', '3');
+      // Try to use cookies from browser to avoid bot detection
+      args.push('--cookies-from-browser', 'chrome');
+      // Add more anti-detection measures
+      args.push('--extractor-args', 'youtube:player_client=android');
+    }
+    
+    logger.info(`Starting yt-dlp with args: ${args.join(' ')}`);
     const ytdlp = spawn('yt-dlp', args);
     
+    let hasOutput = false;
+    let errorOutput = '';
+    
     ytdlp.stdout.on('data', (data) => {
+      hasOutput = true;
       const output = data.toString();
+      logger.info(`yt-dlp stdout: ${output}`);
       parseYtDlpProgress(jobId, output);
     });
     
     ytdlp.stderr.on('data', (data) => {
-      logger.warn(`yt-dlp stderr: ${data}`);
+      const stderr = data.toString();
+      errorOutput += stderr;
+      logger.warn(`yt-dlp stderr: ${stderr}`);
+      
+      // Check for specific errors
+      if (stderr.includes('Video unavailable') || stderr.includes('Private video')) {
+        updateJobStatus(jobId, 'error', 0, 'Video tidak tersedia atau private');
+      } else if (stderr.includes('Sign in to confirm your age')) {
+        updateJobStatus(jobId, 'error', 0, 'Video memerlukan verifikasi umur');
+      } else if (stderr.includes('Sign in to confirm you\'re not a bot') || stderr.includes('bot')) {
+        updateJobStatus(jobId, 'error', 0, 'YouTube mendeteksi aktivitas bot. Gunakan mode "Server Download" untuk hasil yang lebih baik.');
+      } else if (stderr.includes('This video is not available')) {
+        updateJobStatus(jobId, 'error', 0, 'Video tidak tersedia di region ini');
+      } else if (stderr.includes('Requested format is not available')) {
+        updateJobStatus(jobId, 'error', 0, 'Format video yang diminta tidak tersedia');
+      } else if (stderr.includes('HTTP Error 429') || stderr.includes('Too Many Requests')) {
+        updateJobStatus(jobId, 'error', 0, 'Terlalu banyak request. Coba lagi dalam beberapa menit.');
+      }
     });
     
-    ytdlp.on('close', (code) => {
+    ytdlp.on('close', async (code) => {
+      logger.info(`yt-dlp process closed with code: ${code}`);
+      
       if (code === 0) {
         updateJobStatus(jobId, 'completed', 100);
         resolve();
       } else {
-        reject(new Error(`yt-dlp exited with code ${code}`));
+        let errorMessage = `yt-dlp exited with code ${code}`;
+        
+        // Provide more specific error messages based on error output
+        if (errorOutput.includes('Video unavailable')) {
+          errorMessage = 'Video tidak tersedia atau telah dihapus';
+        } else if (errorOutput.includes('Private video')) {
+          errorMessage = 'Video bersifat private dan tidak dapat didownload';
+        } else if (errorOutput.includes('Sign in to confirm you\'re not a bot') || errorOutput.includes('bot')) {
+          // Try youtube-dl as fallback for YouTube
+          if (platform === 'youtube') {
+            logger.info(`yt-dlp failed with bot detection, trying youtube-dl fallback for job ${jobId}`);
+            try {
+              await downloadWithYoutubeDl(jobId, url, outputPath, quality);
+              resolve(); // Success with fallback
+              return;
+            } catch (fallbackError) {
+              logger.error(`youtube-dl fallback also failed: ${fallbackError.message}`);
+              errorMessage = 'YouTube mendeteksi aktivitas bot. Kedua downloader gagal. Gunakan mode "Server Download" untuk hasil yang lebih baik.';
+            }
+          } else {
+            errorMessage = 'YouTube mendeteksi aktivitas bot. Gunakan mode "Server Download" untuk hasil yang lebih baik.';
+          }
+        } else if (errorOutput.includes('Sign in to confirm')) {
+          errorMessage = 'Video memerlukan login atau verifikasi umur';
+        } else if (errorOutput.includes('HTTP Error 429') || errorOutput.includes('Too Many Requests')) {
+          errorMessage = 'Terlalu banyak request ke YouTube. Coba lagi dalam beberapa menit.';
+        } else if (errorOutput.includes('not available')) {
+          errorMessage = 'Video tidak tersedia di region ini atau telah dibatasi';
+        } else if (errorOutput.includes('Requested format')) {
+          errorMessage = 'Format video yang diminta tidak tersedia, coba quality lain';
+        } else {
+          // Provide more specific error messages based on exit code
+          switch (code) {
+            case 1:
+              if (platform === 'youtube') {
+                errorMessage = 'YouTube download gagal karena bot detection. Gunakan mode "Server Download" untuk hasil yang lebih baik.';
+              } else {
+                errorMessage = 'Video tidak dapat didownload. Mungkin private, tidak tersedia, atau memerlukan login.';
+              }
+              break;
+            case 2:
+              errorMessage = 'URL tidak valid atau tidak didukung.';
+              break;
+            case 101:
+              errorMessage = 'Video tidak tersedia di region ini.';
+              break;
+            default:
+              errorMessage = `Download gagal dengan kode error ${code}. Coba lagi atau gunakan URL yang berbeda.`;
+          }
+        }
+        
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
       }
     });
     
     ytdlp.on('error', (error) => {
-      reject(error);
+      logger.error(`yt-dlp spawn error: ${error.message}`);
+      const errorMessage = 'yt-dlp tidak dapat dijalankan. Pastikan yt-dlp sudah terinstall dengan: pip3 install yt-dlp';
+      updateJobStatus(jobId, 'error', 0, errorMessage);
+      reject(new Error(errorMessage));
     });
+    
+    // Timeout after 5 minutes if no output
+    setTimeout(() => {
+      if (!hasOutput) {
+        ytdlp.kill();
+        const errorMessage = 'Download timeout. URL mungkin tidak valid atau server tidak merespons.';
+        updateJobStatus(jobId, 'error', 0, errorMessage);
+        reject(new Error(errorMessage));
+      }
+    }, 300000); // 5 minutes
   });
 };
 
@@ -222,10 +670,18 @@ const downloadM3u8 = (jobId, url, outputPath, quality) => {
   });
 };
 
-const handleDirectDownload = async (jobId, url, quality) => {
+const handleDirectDownload = async (jobId, url, quality, downloaderChoice = 'auto') => {
   try {
     const job = downloadJobs.get(jobId);
     if (!job) return;
+    
+    const platform = detectPlatform(url);
+    
+    // For YouTube direct download, show error message about bot detection
+    if (platform === 'youtube') {
+      updateJobStatus(jobId, 'error', 0, 'Direct download dari YouTube tidak tersedia karena bot detection. Gunakan mode "Server Download" terlebih dahulu, lalu download file dari history.');
+      return;
+    }
     
     // For direct download, we still need to process the video first
     // Then provide the processed file for direct download
@@ -241,6 +697,9 @@ const handleDirectDownload = async (jobId, url, quality) => {
     if (isM3u8) {
       // Process M3U8 to MP4 first
       await downloadM3u8(jobId, url, outputPath, quality);
+    } else if (platform && platform !== 'youtube') {
+      // Use selected downloader for platform videos (except YouTube)
+      await downloadFromPlatform(jobId, url, outputPath, quality, platform, downloaderChoice);
     } else {
       // Process direct video
       await downloadDirectVideo(jobId, url, outputPath, quality);

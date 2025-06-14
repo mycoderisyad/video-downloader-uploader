@@ -51,7 +51,10 @@
 ### Prerequisites
 - Node.js 18+ 
 - FFmpeg (untuk video processing)
-- yt-dlp (untuk platform downloads)
+- **Multi-Downloader Support**:
+  - **yt-dlp**: YouTube, Vimeo, dan platform umum
+  - **gallery-dl**: Instagram, Facebook (lebih reliable)
+  - **youtube-dl**: Fallback untuk YouTube
 
 ### Installation
 

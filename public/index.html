@@ -153,7 +153,6 @@
                         <div>
                             <label class="block text-sm font-medium mb-2">Video URL</label>
                             <input type="url" id="videoUrl" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-gray-700" placeholder="https://example.com/video.m3u8" required>
-                            <p class="text-sm text-gray-500 mt-1">Supports YouTube, Vimeo, Facebook, Instagram, and direct video URLs</p>
                         </div>
                         
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -174,6 +173,19 @@
                                     <option value="direct">Direct Download</option>
                                 </select>
                             </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Downloader (untuk Platform Sosmed)</label>
+                            <select id="downloaderChoice" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                <option value="auto">Auto (Recommended)</option>
+                                <option value="youtube-dl-exec">youtube-dl-exec (Modern)</option>
+                                <option value="yt-dlp">yt-dlp (Standard)</option>
+                                <option value="gallery-dl">gallery-dl (Social Media)</option>
+                                <option value="you-get">you-get (Alternative)</option>
+                                <option value="youtube-dl">youtube-dl (Fallback)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Auto akan memilih downloader terbaik berdasarkan platform</p>
                         </div>
                         
                         <div>
@@ -373,9 +385,7 @@
                         <button id="exportHistoryBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
                             <i class="bi bi-download mr-2"></i>Export
                         </button>
-                        <button id="importHistoryBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
-                            <i class="bi bi-upload mr-2"></i>Import
-                        </button>
+                        
                         <button id="clearAllHistoryBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
                             <i class="bi bi-trash mr-2"></i>Clear All
                         </button>
@@ -428,6 +438,22 @@
                         <!-- Status will be dynamically updated -->
                     </div>
                     
+                    <!-- Panduan YouTube OAuth -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                        <h3 class="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-3 flex items-center">
+                            <i class="bi bi-info-circle mr-2"></i>
+                            Cara Mendapatkan YouTube OAuth Credentials
+                        </h3>
+                        <div class="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+                            <p><strong>Langkah 1:</strong> Buka <a href="https://console.cloud.google.com/" target="_blank" class="underline hover:text-blue-600">Google Cloud Console</a></p>
+                            <p><strong>Langkah 2:</strong> Buat project baru atau pilih project yang ada</p>
+                            <p><strong>Langkah 3:</strong> Aktifkan YouTube Data API v3 di Library</p>
+                            <p><strong>Langkah 4:</strong> Buat OAuth 2.0 Client ID di Credentials</p>
+                            <p><strong>Langkah 5:</strong> Tambahkan Redirect URI: <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://yourdomain.com/api/auth/youtube/callback</code></p>
+                            <p><strong>Langkah 6:</strong> Copy Client ID dan Client Secret ke form di bawah</p>
+                        </div>
+                    </div>
+                    
                     <div id="authSection" class="space-y-4">
                         <div class="space-y-4">
                             <div>
@@ -437,6 +463,11 @@
                             <div>
                                 <label class="block text-sm font-medium mb-2">Client Secret</label>
                                 <input type="password" id="clientSecret" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter Google OAuth Client Secret">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Redirect URI</label>
+                                <input type="url" id="redirectUri" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="https://yourdomain.com/api/auth/youtube/callback" value="https://prafunschool.web.id/api/auth/youtube/callback">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ganti dengan domain Anda sendiri</p>
                             </div>
                             <button id="saveCredentialsBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
                                 <i class="bi bi-save mr-2"></i>Save Credentials
@@ -580,33 +611,7 @@
         </div>
     </main>
 
-    <!-- Import History Modal -->
-    <div id="importModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full">
-            <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-bold">Import History</h3>
-                    <button id="closeImport" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                        <i class="bi bi-x-lg text-xl"></i>
-                    </button>
-                </div>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-2">Select File</label>
-                        <input type="file" id="importFile" accept=".json,.csv" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                    </div>
-                    <div class="flex space-x-3">
-                        <button id="cancelImport" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                            Cancel
-                        </button>
-                        <button id="confirmImport" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                            Import
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Toast Notifications -->
     <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">

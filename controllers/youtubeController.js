@@ -8,10 +8,21 @@ const { downloadJobs } = require('./videoController');
 // YouTube upload job storage
 const uploadJobs = new Map();
 
+// Per-user token storage
+const userTokens = new Map();
+
 // OAuth2 credentials - these should be set in .env file
 const CLIENT_ID = process.env.YOUTUBE_CLIENT_ID;
 const CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET;
 const REDIRECT_URI = process.env.YOUTUBE_REDIRECT_URI || `https://prafunschool.web.id/api/auth/youtube/callback`;
+
+// Generate user session ID from request
+const getUserSessionId = (req) => {
+  // Use IP + User-Agent as unique identifier for user session
+  const ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+  const userAgent = req.get('User-Agent') || '';
+  return require('crypto').createHash('md5').update(ip + userAgent).digest('hex');
+};
 
 // Create OAuth2 client
 const oauth2Client = new google.auth.OAuth2(
@@ -32,11 +43,13 @@ const initiateAuth = async (req, res) => {
     const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
     let clientId = CLIENT_ID;
     let clientSecret = CLIENT_SECRET;
+    let redirectUri = REDIRECT_URI;
     
     if (await fs.pathExists(credentialsPath)) {
       const savedCredentials = await fs.readJson(credentialsPath);
       clientId = savedCredentials.clientId;
       clientSecret = savedCredentials.clientSecret;
+      redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
     }
 
     if (!clientId || !clientSecret) {
@@ -47,17 +60,21 @@ const initiateAuth = async (req, res) => {
       });
     }
 
+    // Get user session ID
+    const userSessionId = getUserSessionId(req);
+
     // Create OAuth2 client with current credentials
     const currentOAuth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      REDIRECT_URI
+      redirectUri
     );
 
     const authUrl = currentOAuth2Client.generateAuthUrl({
       access_type: 'offline',
+      prompt: 'consent',
       scope: SCOPES,
-      state: req.query.state || 'default'
+      state: userSessionId // Use user session ID as state
     });
 
     res.json({
@@ -88,6 +105,11 @@ const handleCallback = async (req, res) => {
       return res.redirect('/?auth=error&message=' + encodeURIComponent('No authorization code received'));
     }
 
+    if (!state) {
+      logger.error('No state parameter received');
+      return res.redirect('/?auth=error&message=' + encodeURIComponent('Invalid authentication state'));
+    }
+
     // Load saved credentials
     const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
     if (!await fs.pathExists(credentialsPath)) {
@@ -101,28 +123,37 @@ const handleCallback = async (req, res) => {
     const callbackOAuth2Client = new google.auth.OAuth2(
       savedCredentials.clientId,
       savedCredentials.clientSecret,
-      REDIRECT_URI
+      savedCredentials.redirectUri || REDIRECT_URI
     );
 
     // Exchange code for tokens
     const { tokens } = await callbackOAuth2Client.getToken(code);
     
-    // Store tokens securely
+    // Validate that we received a refresh token
+    if (!tokens.refresh_token) {
+      logger.error('No refresh token received from Google OAuth');
+      return res.redirect('/?auth=error&message=' + encodeURIComponent('No refresh token received. Please ensure you grant offline access.'));
+    }
+    
+    // Store tokens per user session
     const tokenData = {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expiry_date: tokens.expiry_date,
-      created_at: new Date()
+      token_type: tokens.token_type || 'Bearer',
+      scope: tokens.scope,
+      created_at: new Date(),
+      userSessionId: state
     };
 
-    // Save tokens to file
-    await fs.ensureDir(path.dirname(path.join(__dirname, '../config/youtube_tokens.json')));
-    await fs.writeJson(path.join(__dirname, '../config/youtube_tokens.json'), tokenData);
-
+    // Store tokens in memory for this user session
+    userTokens.set(state, tokenData);
+    
+    logger.info(`YouTube tokens saved successfully for user session: ${state.substring(0, 8)}...`);
     logger.info('YouTube authentication successful');
     
-    // Redirect to success page
-    res.redirect('/?auth=success');
+    // Redirect to success page with session info
+    res.redirect(`/?auth=success&session=${state}`);
   } catch (error) {
     logger.error('Error handling YouTube callback:', error);
     res.redirect('/?auth=error&message=' + encodeURIComponent(error.message));
@@ -171,9 +202,11 @@ const uploadToYoutube = async (req, res) => {
       });
     }
 
-    // Load stored tokens
-    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
-    if (!await fs.pathExists(tokenPath)) {
+    // Get user session ID and check for stored tokens
+    const userSessionId = getUserSessionId(req);
+    const userTokenData = userTokens.get(userSessionId);
+    
+    if (!userTokenData) {
       return res.status(401).json({
         success: false,
         message: 'YouTube authentication required. Please authenticate first.',
@@ -181,8 +214,7 @@ const uploadToYoutube = async (req, res) => {
       });
     }
 
-    const tokens = await fs.readJson(tokenPath);
-    oauth2Client.setCredentials(tokens);
+    oauth2Client.setCredentials(userTokenData);
 
     // Create upload job
     const uploadJobId = uuidv4();
@@ -231,6 +263,27 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata) => {
   try {
     updateUploadStatus(uploadJobId, 'uploading', 0);
 
+    // Ensure we have valid tokens before proceeding
+    const hasValidTokens = await ensureValidTokens();
+    if (!hasValidTokens) {
+      throw new Error('YouTube authentication required. Please authenticate first.');
+    }
+
+    // Double-check that we have refresh token
+    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+    if (await fs.pathExists(tokenPath)) {
+      const tokens = await fs.readJson(tokenPath);
+      if (!tokens.refresh_token) {
+        throw new Error('No refresh token available. Please re-authenticate with YouTube.');
+      }
+      
+      // Ensure oauth2Client has the latest tokens
+      oauth2Client.setCredentials(tokens);
+      logger.info('OAuth2 client credentials set successfully');
+    } else {
+      throw new Error('No authentication tokens found. Please authenticate with YouTube first.');
+    }
+
     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
     const fileSize = (await fs.stat(videoPath)).size;
@@ -265,6 +318,7 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata) => {
       }
     }, 1000);
 
+    logger.info(`Starting YouTube upload for job ${uploadJobId}`);
     const response = await youtube.videos.insert(uploadParams);
 
     clearInterval(progressInterval);
@@ -280,10 +334,22 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata) => {
     logger.error(`YouTube upload error for job ${uploadJobId}:`, error);
     
     let errorMessage = error.message;
-    if (error.code === 401) {
-      errorMessage = 'Authentication expired. Please re-authenticate with YouTube.';
+    if (error.code === 401 || error.message.includes('No refresh token') || error.message.includes('invalid_grant')) {
+      errorMessage = 'Authentication expired or invalid. Please re-authenticate with YouTube.';
+      // Clear invalid tokens
+      const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+      if (await fs.pathExists(tokenPath)) {
+        await fs.remove(tokenPath);
+        logger.info('Cleared invalid YouTube tokens');
+      }
     } else if (error.code === 403) {
       errorMessage = 'YouTube API quota exceeded or insufficient permissions.';
+    } else if (error.message.includes('quota')) {
+      errorMessage = 'YouTube API quota exceeded. Please try again later.';
+    } else if (error.message.includes('authentication')) {
+      errorMessage = 'YouTube authentication failed. Please re-authenticate.';
+    } else if (error.message.includes('refresh token')) {
+      errorMessage = 'Authentication token expired. Please re-authenticate with YouTube.';
     }
     
     updateUploadStatus(uploadJobId, 'error', 0, errorMessage);
@@ -342,33 +408,59 @@ const ensureValidTokens = async () => {
   try {
     const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
     if (!await fs.pathExists(tokenPath)) {
+      logger.warn('No YouTube tokens file found');
       return false;
     }
 
     const tokens = await fs.readJson(tokenPath);
+    
+    // Check if we have refresh token
+    if (!tokens.refresh_token) {
+      logger.warn('No refresh token available in stored tokens');
+      return false;
+    }
+
     oauth2Client.setCredentials(tokens);
 
-    // Check if token needs refresh
-    if (tokens.expiry_date && tokens.expiry_date <= Date.now()) {
-      if (tokens.refresh_token) {
+    // Check if token needs refresh (refresh 5 minutes before expiry)
+    const now = Date.now();
+    const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    if (tokens.expiry_date && (tokens.expiry_date - expiryBuffer) <= now) {
+      logger.info('Access token expired or expiring soon, refreshing...');
+      
+      try {
         const { credentials } = await oauth2Client.refreshAccessToken();
-        oauth2Client.setCredentials(credentials);
         
-        // Save refreshed tokens
-        await fs.writeJson(tokenPath, {
+        // Merge new credentials with existing tokens (preserve refresh_token)
+        const updatedTokens = {
           ...tokens,
           ...credentials,
+          refresh_token: tokens.refresh_token, // Ensure refresh token is preserved
           updated_at: new Date()
-        });
+        };
+        
+        oauth2Client.setCredentials(updatedTokens);
+        
+        // Save refreshed tokens
+        await fs.writeJson(tokenPath, updatedTokens);
         
         logger.info('YouTube tokens refreshed successfully');
         return true;
-      } else {
-        logger.warn('YouTube tokens expired and no refresh token available');
+      } catch (refreshError) {
+        logger.error('Error refreshing YouTube tokens:', refreshError);
+        
+        // If refresh fails, the tokens might be invalid
+        if (refreshError.message.includes('invalid_grant') || refreshError.message.includes('invalid_request')) {
+          logger.warn('Refresh token is invalid, removing tokens file');
+          await fs.remove(tokenPath);
+        }
+        
         return false;
       }
     }
 
+    logger.info('YouTube tokens are valid and not expired');
     return true;
   } catch (error) {
     logger.error('Error ensuring valid YouTube tokens:', error);
@@ -392,12 +484,12 @@ setInterval(() => {
 
 const saveCredentials = async (req, res) => {
   try {
-    const { clientId, clientSecret } = req.body;
+    const { clientId, clientSecret, redirectUri } = req.body;
     
-    if (!clientId || !clientSecret) {
+    if (!clientId || !clientSecret || !redirectUri) {
       return res.status(400).json({
         success: false,
-        message: 'Client ID and Client Secret are required'
+        message: 'Client ID, Client Secret, and Redirect URI are required'
       });
     }
 
@@ -416,6 +508,7 @@ const saveCredentials = async (req, res) => {
     await fs.writeJson(credentialsPath, {
       clientId,
       clientSecret,
+      redirectUri,
       updated_at: new Date()
     });
 
@@ -423,7 +516,7 @@ const saveCredentials = async (req, res) => {
     const newOAuth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      REDIRECT_URI
+      redirectUri
     );
     
     // Replace the global oauth2Client properties
@@ -448,61 +541,65 @@ const saveCredentials = async (req, res) => {
 
 const getAuthStatus = async (req, res) => {
   try {
-    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+    // Get user session ID and check for stored tokens
+    const userSessionId = getUserSessionId(req);
+    const userTokenData = userTokens.get(userSessionId);
     
-    if (!await fs.pathExists(tokenPath)) {
+    if (!userTokenData) {
       return res.json({
         success: true,
-        authenticated: false
+        authenticated: false,
+        message: 'Not authenticated for this session'
       });
     }
 
-    const tokens = await fs.readJson(tokenPath);
+    if (!userTokenData.access_token || !userTokenData.refresh_token) {
+      return res.json({
+        success: true,
+        authenticated: false,
+        message: 'Invalid tokens for this session'
+      });
+    }
+
+    // Load saved credentials for OAuth client
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    if (!await fs.pathExists(credentialsPath)) {
+      return res.json({
+        success: true,
+        authenticated: false,
+        message: 'No credentials configured'
+      });
+    }
+
+    const savedCredentials = await fs.readJson(credentialsPath);
+    const currentOAuth2Client = new google.auth.OAuth2(
+      savedCredentials.clientId,
+      savedCredentials.clientSecret,
+      REDIRECT_URI
+    );
+    currentOAuth2Client.setCredentials(userTokenData);
     
-    // Check if tokens are valid
-    if (tokens.access_token) {
-      // Load saved credentials for OAuth client
-      const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
-      if (await fs.pathExists(credentialsPath)) {
-        const savedCredentials = await fs.readJson(credentialsPath);
-        const currentOAuth2Client = new google.auth.OAuth2(
-          savedCredentials.clientId,
-          savedCredentials.clientSecret,
-          REDIRECT_URI
-        );
-        currentOAuth2Client.setCredentials(tokens);
-        
-        try {
-          const oauth2 = google.oauth2({ version: 'v2', auth: currentOAuth2Client });
-          const userInfo = await oauth2.userinfo.get();
-          
-          res.json({
-            success: true,
-            authenticated: true,
-            userInfo: {
-              email: userInfo.data.email,
-              name: userInfo.data.name,
-              picture: userInfo.data.picture
-            }
-          });
-        } catch (error) {
-          logger.warn('Failed to get user info, but tokens exist:', error.message);
-          res.json({
-            success: true,
-            authenticated: true,
-            userInfo: null
-          });
-        }
-      } else {
-        res.json({
-          success: true,
-          authenticated: false
-        });
-      }
-    } else {
+    try {
+      const oauth2 = google.oauth2({ version: 'v2', auth: currentOAuth2Client });
+      const userInfo = await oauth2.userinfo.get();
+      
+      logger.info(`YouTube tokens are valid for user session: ${userSessionId.substring(0, 8)}...`);
+      
       res.json({
         success: true,
-        authenticated: false
+        authenticated: true,
+        userInfo: {
+          email: userInfo.data.email,
+          name: userInfo.data.name,
+          picture: userInfo.data.picture
+        }
+      });
+    } catch (error) {
+      logger.warn(`Failed to get user info for session ${userSessionId.substring(0, 8)}..., but tokens exist:`, error.message);
+      res.json({
+        success: true,
+        authenticated: true,
+        userInfo: null
       });
     }
   } catch (error) {
@@ -516,16 +613,13 @@ const getAuthStatus = async (req, res) => {
 
 const disconnectAuth = async (req, res) => {
   try {
-    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+    // Get user session ID and remove their tokens
+    const userSessionId = getUserSessionId(req);
     
-    // Delete token file
-    if (await fs.pathExists(tokenPath)) {
-      await fs.remove(tokenPath);
-      logger.info('YouTube tokens deleted successfully');
+    if (userTokens.has(userSessionId)) {
+      userTokens.delete(userSessionId);
+      logger.info(`YouTube tokens deleted successfully for session: ${userSessionId.substring(0, 8)}...`);
     }
-    
-    // Clear OAuth2 client credentials
-    oauth2Client.setCredentials({});
     
     res.json({
       success: true,
