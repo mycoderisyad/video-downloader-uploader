@@ -1,362 +1,312 @@
-# Video Downloader & YouTube Uploader
+# Video Downloader & Uploader
 
-A comprehensive, modern web application for downloading videos from multiple platforms and uploading them to YouTube. Built with Node.js, Express, and a beautiful Tailwind CSS interface.
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)]()
 
-## ✨ Features
+**Aplikasi web untuk download video dari berbagai platform dan upload ke YouTube dengan fitur lengkap dan antarmuka yang user-friendly.**
 
-### 🎬 Video Preview & Download
-- **Video Preview**: Preview videos before downloading with metadata display
-- **Single Download**: Download individual videos with quality selection
-- **Batch Download**: Download multiple videos simultaneously
-- **Direct Download**: Download videos directly to user's computer
-- **Multi-Platform Support**: YouTube, Vimeo, Facebook, Instagram, and direct video URLs
-- **Quality Selection**: Choose from 360p, 480p, 720p, 1080p, or best available
+## Fitur Utama
 
-### 📤 Upload & Management
-- **Single Upload**: Upload individual videos to YouTube
-- **Batch Upload**: Upload multiple videos at once
-- **Drag & Drop**: Intuitive file upload interface
-- **YouTube Integration**: Full OAuth2 authentication with Google
-- **Privacy Settings**: Control video visibility (Private, Unlisted, Public)
-- **Metadata Management**: Set titles, descriptions, tags, and categories
+### **Download Video**
+- **Dual Download Mode**:
+  - **Server Download**: Download ke server terlebih dahulu
+  - **Direct Download**: Process di server lalu auto-download ke komputer user
+- **Quality Selection**: 360p, 480p, 720p, 1080p, atau Best quality
+- **Format Support**: M3U8, MP4, MKV, WebM dengan auto-conversion ke MP4
+- **Batch Download**: Download multiple videos sekaligus
+- **Real-time Progress**: Progress bar, speed, ETA, dan file size tracking
 
-### 📊 History & Progress
-- **Job History**: Complete history of all downloads and uploads
-- **Individual Delete**: Remove specific history items
-- **Clear All**: Bulk delete all history
-- **Export/Import**: Backup and restore history in JSON format
-- **Advanced Filtering**: Filter by type, status, and search by title
-- **Real-time Progress**: Live progress tracking with speedometer
-- **ETA & Speed**: Estimated time and download/upload speed display
+### **Upload ke YouTube**
+- **OAuth2 Authentication**: Secure login dengan Google account
+- **Persistent Login**: Login tersimpan sampai manual disconnect
+- **Complete Metadata**: Title, description, tags, privacy settings, categories
+- **Batch Upload**: Upload multiple videos sekaligus
+- **Direct Links**: Tombol langsung ke video YouTube setelah upload berhasil
 
-### ⚙️ Settings & Configuration
-- **Dark Mode**: Toggle between light and dark themes
-- **Default Settings**: Configure default quality and download modes
-- **Platform Toggle**: Enable/disable specific platforms
-- **Notifications**: Browser and sound notifications for completed jobs
-- **Credentials Management**: Secure YouTube OAuth setup
+### **Job Management**
+- **Complete History**: Track semua download dan upload jobs
+- **Individual Actions**: Delete, download, atau view individual jobs
+- **Bulk Operations**: Clear all, export/import history (JSON/CSV)
+- **Real-time Status**: Live updates untuk semua active jobs
+- **Auto Cleanup**: File otomatis terhapus setiap 24 jam untuk menghemat storage
 
-### 🎨 Modern UI/UX
-- **Tailwind CSS**: Modern, responsive design
-- **Tab Navigation**: Organized interface with Download, Upload, History, and Settings tabs
-- **Toast Notifications**: Non-intrusive status messages
-- **Mobile Responsive**: Works perfectly on all device sizes
-- **Accessibility**: Keyboard navigation and screen reader support
+### **User Interface**
+- **Modern Design**: Tailwind CSS dengan dark mode support
+- **Responsive**: Mobile-friendly design
+- **Tab Navigation**: Organized interface dengan multiple tabs
+- **Drag & Drop**: Upload files dengan drag and drop
+- **Toast Notifications**: Real-time feedback untuk semua actions
+- **Video Preview**: Preview video sebelum download
 
-## 🚀 Quick Start
+### **Technical Features**
+- **Content Security Policy**: Secure CSP configuration
+- **Rate Limiting**: Protection against abuse
+- **Error Handling**: Comprehensive error handling dan logging
+- **Auto Recovery**: Fallback mechanisms untuk reliability
+- **Debugging Tools**: Built-in testing dan debugging functions
+
+## Quick Start
 
 ### Prerequisites
-
 - Node.js 18+ 
-- npm or yarn
-- FFmpeg
-- Python 3 (for yt-dlp)
+- FFmpeg (untuk video processing)
+- yt-dlp (untuk platform downloads)
 
-### Automatic Installation
+### Installation
 
-Run the automated installation script:
+ **Clone Repository**
+```bash
+git clone https://github.com/mycoderisyad/video-downloader-uploader.git
+cd video-downloader-uploader
+```
 
+**Install Dependencies**
 ```bash
 chmod +x install-dependencies.sh
 ./install-dependencies.sh
 ```
 
-This script will:
-- Install FFmpeg
-- Install Python and yt-dlp
-- Install Node.js dependencies
-- Create necessary directories
-- Verify all installations
+ **Start Application**
+```bash
+npm start
+```
 
-### Manual Installation
+**Access Application**
+```
+http://localhost:3000
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd video-downloader-uploader
-   ```
+## Detailed Setup
 
-2. **Install system dependencies**
+### 🔧 System Dependencies
 
-   **Ubuntu/Debian:**
-   ```bash
-   sudo apt update
-   sudo apt install -y ffmpeg python3 python3-pip
-   sudo pip3 install yt-dlp
-   ```
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install -y nodejs npm ffmpeg python3-pip
+pip3 install yt-dlp
+```
 
-   **macOS:**
-   ```bash
-   brew install ffmpeg python
-   pip3 install yt-dlp
-   ```
+**CentOS/RHEL:**
+```bash
+sudo yum install -y nodejs npm ffmpeg python3-pip
+pip3 install yt-dlp
+```
 
-3. **Install Node.js dependencies**
-   ```bash
-   npm install
-   ```
+**macOS:**
+```bash
+brew install node ffmpeg yt-dlp
+```
 
-4. **Create directories**
-   ```bash
-   mkdir -p downloads uploads temp logs exports batch data config
-   ```
-
-5. **Configure environment**
-   ```bash
-   cp env.example .env
-   # Edit .env with your settings
-   ```
-
-6. **Start the application**
-   ```bash
-   npm start
-   ```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file based on `env.example`:
-
-```env
-# Server Configuration
-PORT=3000
-NODE_ENV=production
-BASE_URL=https://yourdomain.com
-
-# YouTube API (Optional - can be set via UI)
-YOUTUBE_CLIENT_ID=your_client_id
-YOUTUBE_CLIENT_SECRET=your_client_secret
-
-# Security
-SESSION_SECRET=your_random_session_secret
-
-# File Paths
-DOWNLOADS_PATH=./downloads
-UPLOADS_PATH=./uploads
-TEMP_PATH=./temp
+**Windows:**
+```bash
+# Install Node.js dari https://nodejs.org/
+# Install FFmpeg dari https://ffmpeg.org/
+# Install yt-dlp: pip install yt-dlp
 ```
 
 ### YouTube OAuth Setup
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable YouTube Data API v3
-4. Create OAuth 2.0 credentials
-5. Add your domain to authorized origins
-6. Add `https://yourdomain.com/api/auth/youtube/callback` to redirect URIs
-7. Enter credentials in the Settings tab of the application
+1. **Google Cloud Console**
+   - Buat project baru di [Google Cloud Console](https://console.cloud.google.com/)
+   - Enable YouTube Data API v3
+   - Buat OAuth 2.0 credentials
 
-## 📖 Usage Guide
+2. **Configure Credentials**
+   - Buka aplikasi → Settings tab
+   - Masukkan Client ID dan Client Secret
+   - Klik "Save Credentials"
 
-### Download Videos
+3. **Authenticate**
+   - Klik "Connect to YouTube"
+   - Login dengan Google account
+   - Grant permissions
 
-1. **Single Download**:
-   - Navigate to the Download tab
-   - Enter video URL
-   - Select quality and download mode
-   - Click Preview to see video details (optional)
-   - Click Download to start
+## 🎯 Usage Guide
 
-2. **Batch Download**:
-   - Enter multiple URLs (one per line)
-   - Select quality and download mode
-   - Click "Start Batch Download"
+### Download Video
 
-### Upload to YouTube
+1. **Single Download**
+   - Pilih tab "Download"
+   - Masukkan video URL
+   - Pilih quality dan download mode
+   - Klik "Download Video"
 
-1. **Setup Authentication**:
-   - Go to Settings tab
-   - Enter YouTube OAuth credentials
-   - Click "Authenticate with YouTube"
-   - Complete OAuth flow
+2. **Batch Download**
+   - Pilih tab "Batch Download"
+   - Masukkan multiple URLs (satu per baris)
+   - Pilih quality dan download mode
+   - Klik "Start Batch Download"
 
-2. **Single Upload**:
-   - Go to Upload tab
-   - Select downloaded video or drag & drop files
-   - Fill in title, description, tags
-   - Set privacy and category
-   - Click "Upload to YouTube"
+3. **Download Modes**
+   - **Server Download**: File disimpan di server, bisa diupload ke YouTube
+   - **Direct Download**: File diprocess di server lalu auto-download ke komputer
 
-3. **Batch Upload**:
-   - Select multiple completed downloads
-   - Set default privacy and tags
-   - Click "Start Batch Upload"
+### Upload ke YouTube
+
+1. **Setup Authentication**
+   - Buka tab "Settings"
+   - Setup YouTube credentials
+   - Connect ke YouTube
+
+2. **Upload Video**
+   - Pilih tab "Upload"
+   - Pilih video dari completed downloads
+   - Isi metadata (title, description, tags)
+   - Pilih privacy setting
+   - Klik "Upload to YouTube"
 
 ### Manage History
 
-- **View History**: Go to History tab to see all jobs
-- **Filter**: Use type, status, and search filters
-- **Export**: Click Export to download history as JSON
-- **Import**: Click Import to restore from backup
-- **Delete**: Use individual delete buttons or "Clear All"
+1. **View Jobs**
+   - Buka tab "History"
+   - Lihat semua download/upload jobs
+   - Filter berdasarkan status atau type
 
-## 🛠️ API Reference
+2. **Individual Actions**
+   - **Download**: Download file ke komputer
+   - **Delete**: Hapus job dan file dari server
+   - **View on YouTube**: Buka video di YouTube (untuk uploads)
+
+3. **Bulk Actions**
+   - **Clear All**: Hapus semua history dan files
+   - **Export**: Export history ke JSON/CSV
+
+## 🔧 API Documentation
 
 ### Download Endpoints
 
-```http
+```javascript
+// Start download
 POST /api/download
-Content-Type: application/json
-
 {
   "url": "https://example.com/video.mp4",
   "title": "Video Title",
   "quality": "720p",
-  "downloadMode": "server"
+  "downloadMode": "direct"
 }
-```
 
-```http
+// Get download status
 GET /api/download-status/:jobId
-```
 
-```http
+// Download file
 GET /api/download-file/:jobId
-```
 
-### Upload Endpoints
-
-```http
-POST /api/upload-youtube
-Content-Type: application/json
-
-{
-  "jobId": "download-job-id",
-  "title": "YouTube Title",
-  "description": "Video description",
-  "tags": ["tag1", "tag2"],
-  "privacy": "private",
-  "category": "22"
-}
-```
-
-```http
-GET /api/upload-status/:jobId
-```
-
-### Utility Endpoints
-
-```http
+// Preview video
 POST /api/preview
-Content-Type: application/json
-
 {
   "url": "https://example.com/video.mp4"
 }
 ```
 
-```http
-POST /api/save-credentials
-Content-Type: application/json
+### Upload Endpoints
 
+```javascript
+// Upload to YouTube
+POST /api/upload-youtube
 {
-  "clientId": "your-client-id",
-  "clientSecret": "your-client-secret"
+  "jobId": "download-job-id",
+  "title": "YouTube Title",
+  "description": "Video description",
+  "tags": ["tag1", "tag2"],
+  "privacy": "public",
+  "category": "22"
+}
+
+// Get upload status
+GET /api/upload-status/:jobId
+```
+
+### Management Endpoints
+
+```javascript
+// Delete job and files
+DELETE /api/cleanup/:jobId
+
+// Clear all files
+DELETE /api/clear-all
+
+// YouTube authentication
+GET /api/auth/youtube
+GET /api/auth/youtube/callback
+GET /api/auth/status
+POST /api/auth/disconnect
+```
+
+## 🧪 Testing & Debugging
+
+### Built-in Testing Functions
+
+Buka Developer Console (F12) dan jalankan:
+
+```javascript
+// Test semua functionality
+testApp();
+
+// Test button functionality
+testButtons();
+
+// Test download functionality
+testDownload();
+
+// Test delete functionality
+testDelete();
+```
+
+
+## 🚀 Deployment
+
+### Production Setup
+
+1. **Environment Variables**
+```bash
+NODE_ENV=production
+PORT=3000
+```
+
+2. **Process Manager**
+```bash
+# Install PM2
+npm install -g pm2
+
+# Start with PM2
+pm2 start ecosystem.config.js
+
+# Setup auto-restart
+pm2 startup
+pm2 save
+```
+
+3. **Nginx Configuration**
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
 }
 ```
 
-```http
-GET /api/auth/status
-```
-
-## 🔒 Security Features
-
-- **Helmet.js**: Security headers
-- **Rate Limiting**: Prevents abuse
-- **Input Sanitization**: Prevents injection attacks
-- **CORS Protection**: Configurable origins
-- **File Validation**: Secure file handling
-- **OAuth2**: Secure YouTube authentication
-
-## 🎯 Supported Platforms
-
-- **YouTube**: Full support with metadata extraction
-- **Vimeo**: Video downloads and info
-- **Facebook**: Video downloads
-- **Instagram**: Video downloads
-- **Direct URLs**: MP4, M3U8, and other formats
-- **Streaming**: HLS and DASH streams
-
-## 📱 Browser Support
-
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-- Mobile browsers (iOS Safari, Chrome Mobile)
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **FFmpeg not found**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt install ffmpeg
-   
-   # macOS
-   brew install ffmpeg
-   ```
-
-2. **yt-dlp installation fails**
-   ```bash
-   pip3 install --user yt-dlp
-   # or
-   python3 -m pip install yt-dlp
-   ```
-
-3. **Permission errors**
-   ```bash
-   chmod 755 downloads uploads temp logs
-   chown -R $USER:$USER downloads uploads temp logs
-   ```
-
-4. **YouTube authentication fails**
-   - Check OAuth credentials
-   - Verify redirect URI
-   - Ensure YouTube Data API is enabled
-
-5. **Download fails**
-   - Check internet connection
-   - Verify URL is accessible
-   - Check available disk space
-
-### Logs
-
-Application logs are stored in the `logs/` directory:
-- `app.log`: General application logs
-- `error.log`: Error logs
-- `combined.log`: All logs combined
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [FFmpeg](https://ffmpeg.org/) - Video processing
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Video downloading
-- [Google APIs](https://developers.google.com/youtube) - YouTube integration
 - [Tailwind CSS](https://tailwindcss.com/) - UI framework
+- [Node.js](https://nodejs.org/) - Runtime environment
 - [Express.js](https://expressjs.com/) - Web framework
-
-## 📞 Support
-
-For support, please:
-1. Check the troubleshooting section
-2. Search existing issues
-3. Create a new issue with detailed information
-4. Include logs and error messages
 
 ---
 
-**Made with ❤️ for the video content community** 
+**Made by [mycoderisyad](https://github.com/mycoderisyad)**
