@@ -11,6 +11,9 @@ const uploadJobs = new Map();
 // Per-user token storage
 const userTokens = new Map();
 
+// Per-user credentials storage (temporary, for auth flow)
+const userCredentials = new Map();
+
 // OAuth2 credentials - these should be set in .env file
 const CLIENT_ID = process.env.YOUTUBE_CLIENT_ID;
 const CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET;
@@ -39,29 +42,56 @@ const SCOPES = [
 
 const initiateAuth = async (req, res) => {
   try {
-    // Try to load saved credentials first
-    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
-    let clientId = CLIENT_ID;
-    let clientSecret = CLIENT_SECRET;
-    let redirectUri = REDIRECT_URI;
+    let clientId, clientSecret, redirectUri;
     
-    if (await fs.pathExists(credentialsPath)) {
-      const savedCredentials = await fs.readJson(credentialsPath);
-      clientId = savedCredentials.clientId;
-      clientSecret = savedCredentials.clientSecret;
-      redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+    // Check if credentials are provided in request body (local-only mode)
+    if (req.body && req.body.clientId && req.body.clientSecret) {
+      clientId = req.body.clientId;
+      clientSecret = req.body.clientSecret;
+      redirectUri = req.body.redirectUri || REDIRECT_URI;
+      
+      logger.info('Using credentials from request (local-only mode)');
+    } else {
+      // Fallback to saved credentials file (legacy mode)
+      const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+      
+      if (await fs.pathExists(credentialsPath)) {
+        const savedCredentials = await fs.readJson(credentialsPath);
+        clientId = savedCredentials.clientId;
+        clientSecret = savedCredentials.clientSecret;
+        redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+        
+        logger.info('Using credentials from file (legacy mode)');
+      } else {
+        // Try environment variables as last resort
+        clientId = CLIENT_ID;
+        clientSecret = CLIENT_SECRET;
+        redirectUri = REDIRECT_URI;
+        
+        if (clientId && clientSecret) {
+          logger.info('Using credentials from environment variables');
+        }
+      }
     }
 
     if (!clientId || !clientSecret) {
       return res.status(500).json({
         success: false,
-        message: 'YouTube credentials not configured. Please save your credentials in Settings first.',
+        message: 'YouTube credentials not provided. Please save your credentials in Settings first.',
         requireCredentials: true
       });
     }
 
     // Get user session ID
     const userSessionId = getUserSessionId(req);
+
+    // Store credentials temporarily for this user session (for callback)
+    userCredentials.set(userSessionId, {
+      clientId,
+      clientSecret,
+      redirectUri,
+      timestamp: Date.now()
+    });
 
     // Create OAuth2 client with current credentials
     const currentOAuth2Client = new google.auth.OAuth2(
@@ -110,20 +140,52 @@ const handleCallback = async (req, res) => {
       return res.redirect('/?auth=error&message=' + encodeURIComponent('Invalid authentication state'));
     }
 
-    // Load saved credentials
-    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
-    if (!await fs.pathExists(credentialsPath)) {
-      logger.error('No saved credentials found');
+    // Try to get credentials from user session first
+    let clientId, clientSecret, redirectUri;
+    
+    // First try user session credentials (from initiate auth)
+    if (userCredentials.has(state)) {
+      const sessionCreds = userCredentials.get(state);
+      clientId = sessionCreds.clientId;
+      clientSecret = sessionCreds.clientSecret;
+      redirectUri = sessionCreds.redirectUri;
+      
+      // Clean up temporary credentials
+      userCredentials.delete(state);
+      
+      logger.info('Using session credentials for callback');
+    } else {
+      // Fallback to saved credentials file
+      const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+      if (await fs.pathExists(credentialsPath)) {
+        const savedCredentials = await fs.readJson(credentialsPath);
+        clientId = savedCredentials.clientId;
+        clientSecret = savedCredentials.clientSecret;
+        redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+        
+        logger.info('Using saved credentials for callback');
+      } else {
+        // Last resort: environment variables
+        clientId = CLIENT_ID;
+        clientSecret = CLIENT_SECRET;
+        redirectUri = REDIRECT_URI;
+        
+        if (clientId && clientSecret) {
+          logger.info('Using environment credentials for callback');
+        }
+      }
+    }
+    
+    if (!clientId || !clientSecret) {
+      logger.error('No credentials available for callback');
       return res.redirect('/?auth=error&message=' + encodeURIComponent('No credentials found'));
     }
-
-    const savedCredentials = await fs.readJson(credentialsPath);
     
-    // Create OAuth2 client with saved credentials
+    // Create OAuth2 client with available credentials
     const callbackOAuth2Client = new google.auth.OAuth2(
-      savedCredentials.clientId,
-      savedCredentials.clientSecret,
-      savedCredentials.redirectUri || REDIRECT_URI
+      clientId,
+      clientSecret,
+      redirectUri
     );
 
     // Exchange code for tokens
@@ -523,6 +585,22 @@ const updateUploadStatus = (jobId, status, progress, error = null, videoId = nul
   }
 };
 
+// Cleanup expired credentials (run every 10 minutes)
+const cleanupExpiredCredentials = () => {
+  const now = Date.now();
+  const expireTime = 10 * 60 * 1000; // 10 minutes
+  
+  for (const [sessionId, creds] of userCredentials.entries()) {
+    if (now - creds.timestamp > expireTime) {
+      userCredentials.delete(sessionId);
+      logger.info(`Cleaned up expired credentials for session: ${sessionId.substring(0, 8)}...`);
+    }
+  }
+};
+
+// Run cleanup every 10 minutes
+setInterval(cleanupExpiredCredentials, 10 * 60 * 1000);
+
 // Check and refresh tokens if needed
 const ensureValidTokens = async () => {
   try {
@@ -681,21 +759,44 @@ const getAuthStatus = async (req, res) => {
       });
     }
 
-    // Load saved credentials for OAuth client
-    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
-    if (!await fs.pathExists(credentialsPath)) {
-      return res.json({
-        success: true,
-        authenticated: false,
-        message: 'No credentials configured'
-      });
+    // Try to get credentials from multiple sources
+    let clientId, clientSecret, redirectUri;
+    
+    // First try: credentials from request body (local-only mode)
+    if (req.body && req.body.clientId && req.body.clientSecret) {
+      clientId = req.body.clientId;
+      clientSecret = req.body.clientSecret;
+      redirectUri = req.body.redirectUri || REDIRECT_URI;
+      logger.info('Using credentials from request body for auth status check');
+    } else {
+      // Second try: saved credentials file
+      const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+      if (await fs.pathExists(credentialsPath)) {
+        const savedCredentials = await fs.readJson(credentialsPath);
+        clientId = savedCredentials.clientId;
+        clientSecret = savedCredentials.clientSecret;
+        redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+        logger.info('Using credentials from file for auth status check');
+      } else {
+        // Third try: environment variables
+        clientId = CLIENT_ID;
+        clientSecret = CLIENT_SECRET;
+        redirectUri = REDIRECT_URI;
+        
+        if (!clientId || !clientSecret) {
+          return res.json({
+            success: true,
+            authenticated: false,
+            message: 'No credentials configured'
+          });
+        }
+        logger.info('Using credentials from environment for auth status check');
+      }
     }
-
-    const savedCredentials = await fs.readJson(credentialsPath);
     const currentOAuth2Client = new google.auth.OAuth2(
-      savedCredentials.clientId,
-      savedCredentials.clientSecret,
-      REDIRECT_URI
+      clientId,
+      clientSecret,
+      redirectUri
     );
     currentOAuth2Client.setCredentials(userTokenData);
     

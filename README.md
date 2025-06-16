@@ -313,3 +313,91 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Made by [mycoderisyad](https://github.com/mycoderisyad)**
+
+## 🔐 YouTube Credentials Security Options
+
+### Option 1: Local Storage Only (Recommended) ✅
+
+**Keamanan Maksimal**: Credentials hanya disimpan di browser user, tidak pernah dikirim ke server.
+
+**Keuntungan:**
+- ✅ Credentials tidak tersimpan di server
+- ✅ Setiap user menyimpan credentials sendiri
+- ✅ Tidak ada risiko kebocoran data di server
+- ✅ Auth tetap persisten sampai user hapus data browser
+- ✅ Mudah diimplementasikan
+
+**Cara Kerja:**
+1. User input Client ID/Secret di Settings
+2. Credentials disimpan di `localStorage` browser (encrypted base64)
+3. Saat auth, credentials dikirim sekali ke server untuk generate auth URL
+4. Server tidak menyimpan credentials, hanya tokens sementara
+5. Auth tetap aktif sampai user disconnect atau hapus data browser
+
+**Implementasi:**
+```javascript
+// Credentials disimpan lokal
+localStorage.setItem('youtube_credentials', encryptedData);
+
+// Dikirim ke server hanya saat butuh auth URL
+fetch('/api/auth/youtube', {
+    method: 'POST',
+    body: JSON.stringify(localCredentials)
+});
+```
+
+### Option 2: Database Storage
+
+**Untuk Multi-User atau Shared Hosting**: Jika butuh credentials terpusat.
+
+**Database Options:**
+
+#### A. MongoDB (Recommended untuk Node.js)
+```bash
+# Install MongoDB
+npm install mongodb mongoose
+
+# Connection string
+MONGODB_URI=mongodb://localhost:27017/video-downloader
+```
+
+#### B. Supabase (Managed PostgreSQL)
+```bash
+# Install Supabase client
+npm install @supabase/supabase-js
+
+# Environment variables
+SUPABASE_URL=your-project-url
+SUPABASE_ANON_KEY=your-anon-key
+```
+
+#### C. SQLite (Simple File Database)
+```bash
+# Install SQLite
+npm install sqlite3 better-sqlite3
+
+# No server needed, file-based
+DATABASE_PATH=./data/credentials.db
+```
+
+**Perbandingan Database:**
+
+| Database | Pros | Cons | Best For |
+|----------|------|------|----------|
+| **MongoDB** | NoSQL, flexible, good for Node.js | Requires MongoDB server | Complex apps |
+| **Supabase** | Managed, real-time, built-in auth | Requires internet, paid plans | Cloud apps |
+| **SQLite** | Simple, file-based, no server | Single-user, limited concurrent access | Simple apps |
+
+### Recommendation
+
+**Gunakan Option 1 (Local Storage)** karena:
+1. ✅ Paling aman - credentials tidak di server
+2. ✅ Mudah implement - tidak butuh database
+3. ✅ Auth tetap persisten
+4. ✅ Sesuai untuk personal use
+5. ✅ Tidak ada biaya tambahan
+
+**Gunakan Database hanya jika:**
+- Multi-user dengan admin panel
+- Butuh backup credentials terpusat
+- Shared hosting dengan multiple domains

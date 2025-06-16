@@ -258,6 +258,20 @@
                                 <i class="bi bi-download mr-2"></i>Download
                             </button>
                         </div>
+                        
+                        <!-- Download Progress Indicator -->
+                        <div id="downloadProgress" class="mt-4 hidden">
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-blue-800 dark:text-blue-200">Downloading...</span>
+                                    <span id="downloadPercent" class="text-sm text-blue-600 dark:text-blue-400">0%</span>
+                                </div>
+                                <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                                    <div id="downloadProgressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="downloadStatus" class="text-xs text-blue-600 dark:text-blue-400 mt-2">Starting...</div>
+                            </div>
+                        </div>
                     </form>
                 </div>
 
@@ -391,6 +405,20 @@
                         <button type="submit" id="uploadBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
                             <i class="bi bi-youtube mr-2"></i>Upload to YouTube
                         </button>
+                        
+                        <!-- Upload Progress Indicator -->
+                        <div id="uploadProgress" class="mt-4 hidden">
+                            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-red-800 dark:text-red-200">Uploading to YouTube...</span>
+                                    <span id="uploadPercent" class="text-sm text-red-600 dark:text-red-400">0%</span>
+                                </div>
+                                <div class="w-full bg-red-200 dark:bg-red-800 rounded-full h-2">
+                                    <div id="uploadProgressBar" class="bg-red-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="uploadStatus" class="text-xs text-red-600 dark:text-red-400 mt-2">Starting...</div>
+                            </div>
+                        </div>
                     </form>
                 </div>
 
@@ -512,7 +540,7 @@
                             <p><strong>Langkah 2:</strong> Buat project baru atau pilih project yang ada</p>
                             <p><strong>Langkah 3:</strong> Aktifkan YouTube Data API v3 di Library</p>
                             <p><strong>Langkah 4:</strong> Buat OAuth 2.0 Client ID di Credentials</p>
-                            <p><strong>Langkah 5:</strong> Tambahkan Redirect URI: <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://yourdomain.com/api/auth/youtube/callback</code></p>
+                            <p><strong>Langkah 5:</strong> Tambahkan Redirect URI: <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://prafunschool.web.id/api/auth/youtube/callback</code></p>
                             <p><strong>Langkah 6:</strong> Copy Client ID dan Client Secret ke form di bawah</p>
                         </div>
                     </div>
@@ -529,8 +557,8 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Redirect URI</label>
-                                <input type="url" id="redirectUri" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="https://yourdomain.com/api/auth/youtube/callback" value="https://prafunschool.web.id/api/auth/youtube/callback">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ganti dengan domain Anda sendiri</p>
+                                <input type="url" id="redirectUri" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="https://prafunschool.web.id/api/auth/youtube/callback" value="https://prafunschool.web.id/api/auth/youtube/callback" readonly>
+                                <p class="text-xs text-green-600 dark:text-green-400 mt-1"><i class="bi bi-check-circle mr-1"></i>URL callback sudah benar untuk domain ini</p>
                             </div>
                             <button id="saveCredentialsBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
                                 <i class="bi bi-save mr-2"></i>Save Credentials
@@ -673,6 +701,11 @@
             </div>
         </div>
     </main>
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">
+        <!-- Toast notifications will be added here -->
+    </div>
+
     <!-- Single Corner Ad - Pojok Kanan Bawah -->
     <div id="cornerAd" class="fixed bottom-4 right-4 z-40 w-48 h-32">
         <!-- Ad akan dimuat oleh ads-manager.js -->

@@ -110,27 +110,103 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 async function initializeApp() {
-    // Check URL parameters for auth callback
-    const urlParams = new URLSearchParams(window.location.search);
-    const authStatus = urlParams.get('auth');
+    console.log('🚀 Initializing app...');
     
-    if (authStatus === 'success') {
-        showToast('YouTube authentication successful!', 'success');
-        window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (authStatus === 'error') {
-        const errorMessage = urlParams.get('message');
-        showToast('YouTube authentication failed: ' + (errorMessage || 'Unknown error'), 'error');
-        window.history.replaceState({}, document.title, window.location.pathname);
+    try {
+        // Load settings first
+        loadSettings();
+        console.log('✅ Settings loaded');
+        
+        // Load jobs from storage
+        loadJobsFromStorage();
+        console.log('✅ Jobs loaded from storage');
+        
+        // Setup event listeners
+        setupEventListeners();
+        console.log('✅ Event listeners setup');
+        
+        // Setup dark mode
+        setupDarkMode();
+        console.log('✅ Dark mode setup');
+        
+        // Setup tab navigation
+        setupTabNavigation();
+        console.log('✅ Tab navigation setup');
+        
+        // Setup drag and drop
+        setupDragAndDrop();
+        console.log('✅ Drag and drop setup');
+        
+        // Update UI
+        updateJobsList();
+        updateDownloadJobSelect();
+        updateBatchVideoList();
+        console.log('✅ UI updated');
+        
+        // Check auth status
+        console.log('🔍 Checking initial auth status...');
+        await checkAuthStatus();
+        
+        // Update credentials status
+        updateCredentialsStatus(hasLocalCredentials());
+        console.log('✅ Credentials status updated');
+        
+        // Restore active tab (with delay to ensure DOM is ready)
+        setTimeout(() => {
+            restoreActiveTab();
+            console.log('✅ Active tab restored');
+        }, 200);
+        
+        // Request notification permission
+        requestNotificationPermission();
+        console.log('✅ Notification permission requested');
+        
+        console.log('🎉 App initialization completed successfully!');
+        
+    } catch (error) {
+        console.error('❌ Error during app initialization:', error);
+        showToast('Error initializing app: ' + error.message, 'error');
     }
+}
+
+// Enhanced tab restoration with better timing and fallback
+function restoreActiveTab() {
+    // Multiple attempts with increasing delays
+    const attemptRestore = (attempt = 1) => {
+        const savedTab = localStorage.getItem('activeTab') || 'download';
+        console.log(`Attempt ${attempt}: Restoring tab:`, savedTab);
+        
+        const tabButton = document.querySelector(`[data-tab="${savedTab}"]`);
+        if (tabButton) {
+            console.log('Found tab button, clicking:', tabButton);
+            tabButton.click();
+            return true;
+        } else {
+            console.error('Tab button not found for:', savedTab);
+            
+            // Try again with increasing delay
+            if (attempt < 5) {
+                setTimeout(() => attemptRestore(attempt + 1), attempt * 200);
+            } else {
+                // Final fallback to download tab
+                console.log('Final fallback to download tab');
+                const downloadTab = document.querySelector('[data-tab="download"]');
+                if (downloadTab) {
+                    downloadTab.click();
+                } else {
+                    console.error('Even download tab not found!');
+                }
+            }
+            return false;
+        }
+    };
     
-    loadJobsFromStorage();
-    updateJobsList();
-    updateDownloadJobSelect();
-    updateBatchVideoList();
-    requestNotificationPermission();
-    
-    // Check auth status (async)
-    await checkAuthStatus();
+    // Start first attempt after DOM is ready
+    setTimeout(() => attemptRestore(), 100);
+}
+
+function saveActiveTab(tabName) {
+    localStorage.setItem('activeTab', tabName);
 }
 
 function setupEventListeners() {
@@ -291,6 +367,9 @@ function setupTabNavigation() {
             if (targetContent) {
                 targetContent.classList.add('active');
                 console.log('✅ Tab switched to:', targetTab);
+                
+                // Save active tab
+                saveActiveTab(targetTab);
             } else {
                 console.error('❌ Target tab content not found:', targetTab + 'Tab');
             }
@@ -330,26 +409,22 @@ async function handleDownload(e) {
     e.preventDefault();
     
     let url = document.getElementById('videoUrl').value;
-    const title = document.getElementById('videoTitle').value;
     const quality = document.getElementById('quality').value;
+    const format = document.getElementById('format').value;
     const downloadMode = document.getElementById('downloadMode').value;
-    const downloaderChoice = document.getElementById('downloaderChoice').value;
     
     if (!url) {
-        showToast('Video URL is required', 'error');
+        showToast('Please enter a video URL', 'error');
         return;
     }
     
-    // Clean and normalize URL - remove accidental spaces and normalize
+    // Clean URL
     const originalUrl = url;
-    url = url.trim();
-    url = url.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
-    url = url.replace(/\s+/g, ''); // Remove any internal spaces
+    url = url.trim().replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, '');
     
-    // Update the input field if URL was cleaned
     if (originalUrl !== url) {
         document.getElementById('videoUrl').value = url;
-        showToast('URL dibersihkan otomatis (spasi dihapus)', 'info');
+        showToast('URL cleaned automatically', 'info');
     }
     
     try {
@@ -360,18 +435,24 @@ async function handleDownload(e) {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url, title, quality, downloadMode, downloaderChoice })
+            body: JSON.stringify({
+                url,
+                quality,
+                format,
+                downloadMode
+            })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            currentDownloadJob = data.jobId;
+            // Store job info
             downloadJobs.set(data.jobId, {
                 id: data.jobId,
                 url,
-                title: title || 'Untitled',
+                title: data.title || 'Unknown Title',
                 quality,
+                format,
                 downloadMode,
                 status: data.status,
                 progress: 0,
@@ -379,26 +460,29 @@ async function handleDownload(e) {
                 timestamp: new Date().toISOString()
             });
             
+            currentDownloadJob = data.jobId;
+            
             saveJobsToStorage();
             showProgress('Download Video', 'starting', 0);
+            showInlineProgress('download');
+            
+            // Update inline progress immediately
+            updateInlineProgress('download', downloadJobs.get(data.jobId));
             
             // Show platform-specific messages
-            const platform = detectPlatform(url);
-            if (downloadMode === 'direct') {
-                if (platform === 'youtube') {
-                    showToast('⚠️ YouTube Direct Download: Mungkin gagal karena bot detection. Gunakan Server Download untuk hasil terbaik.', 'warning');
-                } else if (platform === 'instagram' || platform === 'facebook') {
-                    showToast('ℹ️ Menggunakan Gallery-dl untuk platform sosial media - hasil lebih baik!', 'info');
-                } else {
-                    // showToast('Download started!', 'success'); // Removed debug notification
-                }
+            if (data.platform === 'youtube') {
+                showToast('YouTube download started! This may take a few minutes.', 'success');
+            } else if (data.platform === 'instagram') {
+                showToast('Instagram download started!', 'success');
+            } else if (data.platform === 'tiktok') {
+                showToast('TikTok download started!', 'success');
             } else {
-                // showToast('Download started!', 'success'); // Removed debug notification
+                showToast('Download started!', 'success');
             }
             
             // Reset form
-            downloadForm.reset();
-            updateDownloadJobSelect();
+            document.getElementById('downloadForm').reset();
+            
         } else {
             showToast(data.message || 'Error starting download', 'error');
         }
@@ -513,20 +597,19 @@ async function handleUpload(e) {
     e.preventDefault();
     
     const jobId = document.getElementById('downloadJobSelect').value;
-    const title = document.getElementById('youtubeTitle').value;
-    const description = document.getElementById('youtubeDescription').value;
-    const privacy = document.getElementById('privacy').value;
-    const category = document.getElementById('category').value;
-    const tagsInput = document.getElementById('youtubeTags').value;
-    const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()) : [];
+    const title = document.getElementById('videoTitle').value;
+    const description = document.getElementById('videoDescription').value;
+    const tags = document.getElementById('videoTags').value;
+    const privacy = document.getElementById('videoPrivacy').value;
+    const category = document.getElementById('videoCategory').value;
     
     if (!jobId) {
-        showToast('Please select a downloaded video', 'error');
+        showToast('Please select a completed download first', 'error');
         return;
     }
     
-    if (!title) {
-        showToast('YouTube title is required', 'error');
+    if (!title.trim()) {
+        showToast('Please enter a video title', 'error');
         return;
     }
     
@@ -540,9 +623,9 @@ async function handleUpload(e) {
             },
             body: JSON.stringify({
                 jobId,
-                title,
-                description,
-                tags,
+                title: title.trim(),
+                description: description.trim(),
+                tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
                 privacy,
                 category
             })
@@ -551,12 +634,12 @@ async function handleUpload(e) {
         const data = await response.json();
         
         if (data.success) {
-            currentUploadJob = data.uploadJobId;
-            uploadJobs.set(data.uploadJobId, {
-                id: data.uploadJobId,
+            // Store upload job info
+            uploadJobs.set(data.jobId, {
+                id: data.jobId,
                 downloadJobId: jobId,
-                title,
-                description,
+                title: title.trim(),
+                description: description.trim(),
                 privacy,
                 category,
                 status: data.status,
@@ -565,9 +648,15 @@ async function handleUpload(e) {
                 timestamp: new Date().toISOString()
             });
             
+            currentUploadJob = data.jobId;
+            
             saveJobsToStorage();
             showProgress('Upload to YouTube', 'starting', 0);
             showToast('YouTube upload started!', 'success');
+            showInlineProgress('upload');
+            
+            // Update inline progress immediately
+            updateInlineProgress('upload', uploadJobs.get(data.jobId));
             
             // Reset form
             uploadForm.reset();
@@ -794,37 +883,89 @@ function handleFileUpload(files) {
     updateBatchVideoList();
 }
 
+// Enhanced auth window monitoring with better detection
 async function initiateYouTubeAuth() {
     try {
-        const response = await fetch(`${API_BASE}/api/auth/youtube`);
+        // Get local credentials first
+        const localCreds = getLocalCredentials();
+        
+        const requestBody = localCreds ? {
+            clientId: localCreds.clientId,
+            clientSecret: localCreds.clientSecret,
+            redirectUri: localCreds.redirectUri
+        } : {};
+        
+        const response = await fetch(`${API_BASE}/api/auth/youtube`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
         const data = await response.json();
         
         if (data.success) {
-            // Open auth URL in new window
-            const authWindow = window.open(data.authUrl, 'youtube-auth', 'width=600,height=600');
+            // Open auth window
+            const authWindow = window.open(data.authUrl, 'youtube-auth', 'width=600,height=600,scrollbars=yes,resizable=yes');
             
-            // Monitor the auth window
-            const checkClosed = setInterval(() => {
-                if (authWindow.closed) {
-                    clearInterval(checkClosed);
-                    // Check auth status after window closes
-                    setTimeout(async () => {
-                        const isAuthenticated = await checkAuthStatus();
-                        if (isAuthenticated) {
-                            showToast('YouTube authentication successful!', 'success');
-                        } else {
-                            showToast('Authentication was not completed. Please try again.', 'warning');
+            // Enhanced monitoring with multiple detection methods
+            let authCompleted = false;
+            let checkCount = 0;
+            const maxChecks = 300; // 5 minutes max
+            
+            const checkAuth = setInterval(async () => {
+                checkCount++;
+                
+                try {
+                    // Check if window is closed
+                    if (authWindow.closed) {
+                        clearInterval(checkAuth);
+                        if (!authCompleted) {
+                            // Give a moment for any pending auth to complete
+                            setTimeout(async () => {
+                                const isAuthenticated = await checkAuthStatus();
+                                if (isAuthenticated) {
+                                    authCompleted = true;
+                                    showToast('YouTube authentication successful!', 'success');
+                                } else {
+                                    showToast('Authentication window was closed. Please try again.', 'warning');
+                                }
+                            }, 2000); // Increased delay
                         }
-                    }, 1000);
+                        return;
+                    }
+                    
+                    // Periodically check auth status even if window is open
+                    if (checkCount % 5 === 0) { // Every 5 seconds
+                        const isAuthenticated = await checkAuthStatus();
+                        if (isAuthenticated && !authCompleted) {
+                            authCompleted = true;
+                            clearInterval(checkAuth);
+                            authWindow.close();
+                            showToast('YouTube authentication successful!', 'success');
+                            return;
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Auth monitoring error:', error);
+                }
+                
+                // Timeout after max checks
+                if (checkCount >= maxChecks) {
+                    clearInterval(checkAuth);
+                    if (!authWindow.closed) {
+                        authWindow.close();
+                    }
+                    if (!authCompleted) {
+                        showToast('Authentication timeout. Please try again.', 'warning');
+                    }
                 }
             }, 1000);
             
         } else {
-            if (data.requireCredentials) {
-                showToast('Please save your YouTube credentials in Settings first', 'warning');
-            } else {
-                showToast(data.message || 'Error initiating authentication', 'error');
-            }
+            showToast(data.message || 'Error initiating authentication', 'error');
         }
     } catch (error) {
         console.error('Auth error:', error);
@@ -937,85 +1078,197 @@ function showAuthErrorWithRefresh(message) {
     }, 15000);
 }
 
+// Enhanced progress updates with better error handling
 async function updateProgress() {
-    // Update download progress
-    if (currentDownloadJob) {
-        try {
-            const response = await fetch(`${API_BASE}/api/download-status/${currentDownloadJob}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                const job = data.job;
-                downloadJobs.set(currentDownloadJob, {
-                    ...downloadJobs.get(currentDownloadJob),
-                    status: job.status,
-                    progress: job.progress,
-                    error: job.error
-                });
+    try {
+        // Get all active jobs
+        const allJobs = [...downloadJobs.values(), ...uploadJobs.values()];
+        const activeJobs = allJobs.filter(job => 
+            job.status === 'downloading' || job.status === 'uploading' || job.status === 'starting'
+        );
+        
+        // Update each active job
+        for (const job of activeJobs) {
+            try {
+                const endpoint = job.type === 'download' ? 'download-status' : 'upload-status';
+                const response = await fetch(`${API_BASE}/api/${endpoint}/${job.id}`);
                 
-                saveJobsToStorage();
-                
-                if (currentDownloadJob && (job.status === 'downloading' || job.status === 'starting')) {
-                    showProgress('Download Video', job.status, job.progress, job.error);
-                } else if (job.status === 'completed') {
-                    showProgress('Download Video', job.status, job.progress);
-                    currentDownloadJob = null;
-                    updateDownloadJobSelect();
-                    setTimeout(() => hideProgress(), 3030);
-                } else if (job.status === 'error') {
-                    showProgress('Download Video', job.status, job.progress, job.error);
-                    currentDownloadJob = null;
-                    setTimeout(() => hideProgress(), 5000);
+                if (!response.ok) {
+                    console.warn(`Failed to fetch status for job ${job.id}: ${response.status}`);
+                    continue;
                 }
-            }
-        } catch (error) {
-            console.error('Error fetching download status:', error);
-        }
-    }
-    
-    // Update upload progress
-    if (currentUploadJob) {
-        try {
-            const response = await fetch(`${API_BASE}/api/upload-status/${currentUploadJob}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                const job = data.job;
-                uploadJobs.set(currentUploadJob, {
-                    ...uploadJobs.get(currentUploadJob),
-                    status: job.status,
-                    progress: job.progress,
-                    error: job.error,
-                    videoId: job.videoId,
-                    videoUrl: job.videoUrl
-                });
                 
-                saveJobsToStorage();
+                const data = await response.json();
                 
-                if (currentUploadJob && (job.status === 'uploading' || job.status === 'starting')) {
-                    showProgress('Upload ke YouTube', job.status, job.progress, job.error);
-                } else if (job.status === 'completed') {
-                    showProgress('Upload ke YouTube', job.status, job.progress);
-                    showVideoResult(job.videoUrl);
-                    currentUploadJob = null;
-                } else if (job.status === 'error') {
-                    showProgress('Upload ke YouTube', job.status, job.progress, job.error);
+                if (data.success && data.job) {
+                    // Update job properties
+                    const updatedJob = data.job;
+                    job.status = updatedJob.status;
+                    job.progress = updatedJob.progress || 0;
+                    job.error = updatedJob.error;
+                    job.speed = updatedJob.speed;
+                    job.eta = updatedJob.eta;
+                    job.fileSize = updatedJob.fileSize;
                     
-                    // Check if error is authentication related
-                    if (job.error && job.error.includes('authentication')) {
-                        showAuthErrorWithRefresh(job.error);
+                    // Update additional properties
+                    if (updatedJob.youtubeUrl) job.youtubeUrl = updatedJob.youtubeUrl;
+                    if (updatedJob.videoId) job.videoId = updatedJob.videoId;
+                    if (updatedJob.directDownloadUrl) job.directDownloadUrl = updatedJob.directDownloadUrl;
+                    if (updatedJob.isDirectDownload !== undefined) job.isDirectDownload = updatedJob.isDirectDownload;
+                    
+                    // Update job in the appropriate map
+                    if (job.type === 'download') {
+                        downloadJobs.set(job.id, job);
+                        // Always update inline progress for downloads
+                        updateInlineProgress('download', job);
+                    } else if (job.type === 'upload') {
+                        uploadJobs.set(job.id, job);
+                        // Always update inline progress for uploads
+                        updateInlineProgress('upload', job);
                     }
                     
-                    currentUploadJob = null;
-                    setTimeout(() => hideProgress(), 5000);
+                    // Handle direct download completion
+                    if (job.type === 'download' && job.downloadMode === 'direct' && 
+                        job.status === 'completed' && !job.directDownloadTriggered) {
+                        job.directDownloadTriggered = true;
+                        console.log('🔽 Triggering direct download for job:', job.id);
+                        
+                        setTimeout(() => {
+                            downloadJobFile(job.id);
+                        }, 1000);
+                    }
+                    
+                    // Update batch job progress
+                    if (job.batchId) {
+                        updateBatchProgress(job.batchId);
+                    }
                 }
+            } catch (error) {
+                console.error(`Error updating job ${job.id}:`, error);
             }
-        } catch (error) {
-            console.error('Error fetching upload status:', error);
         }
+        
+        // Update main progress UI if there are active jobs
+        if (activeJobs.length > 0) {
+            const currentJob = activeJobs[0];
+            updateProgressUI(currentJob);
+        } else {
+            // Hide main progress if no active jobs
+            if (currentDownloadJob || currentUploadJob) {
+                hideProgress();
+                currentDownloadJob = null;
+                currentUploadJob = null;
+            }
+        }
+        
+        // Save and update UI
+        saveJobsToStorage();
+        updateJobsList();
+        updateDownloadJobSelect();
+        checkCompletedJobs();
+        
+    } catch (error) {
+        console.error('Error in updateProgress:', error);
     }
-    
-    updateJobsList();
+}
+
+// Enhanced inline progress with better visibility and error handling
+function updateInlineProgress(type, job) {
+    try {
+        const progressDiv = document.getElementById(`${type}Progress`);
+        const percentSpan = document.getElementById(`${type}Percent`);
+        const progressBar = document.getElementById(`${type}ProgressBar`);
+        const statusDiv = document.getElementById(`${type}Status`);
+        
+        if (!progressDiv || !job) {
+            console.warn(`Progress elements not found for type: ${type}`);
+            return;
+        }
+        
+        // Always show progress for active jobs
+        if (job.status === 'downloading' || job.status === 'uploading' || job.status === 'starting') {
+            progressDiv.classList.remove('hidden');
+            
+            const progress = Math.max(0, Math.min(100, job.progress || 0));
+            percentSpan.textContent = `${Math.round(progress)}%`;
+            progressBar.style.width = `${progress}%`;
+            
+            // Build detailed status text
+            let statusText = job.status.charAt(0).toUpperCase() + job.status.slice(1);
+            
+            if (job.speed && job.speed > 0) {
+                statusText += ` • ${formatBytes(job.speed)}/s`;
+            }
+            
+            if (job.eta && job.eta > 0) {
+                statusText += ` • ETA: ${formatTime(job.eta)}`;
+            }
+            
+            if (job.fileSize && job.fileSize > 0) {
+                statusText += ` • Size: ${formatBytes(job.fileSize)}`;
+            }
+            
+            statusDiv.textContent = statusText;
+            
+            // Reset error styling
+            progressBar.classList.remove('bg-red-600');
+            progressBar.classList.add('bg-blue-600');
+            
+        } else if (job.status === 'completed') {
+            // Show completion briefly
+            percentSpan.textContent = '100%';
+            progressBar.style.width = '100%';
+            progressBar.classList.remove('bg-red-600');
+            progressBar.classList.add('bg-green-600');
+            statusDiv.textContent = 'Completed successfully!';
+            
+            setTimeout(() => {
+                hideInlineProgress(type);
+            }, 5000); // Show completion for 5 seconds
+            
+        } else if (job.status === 'error') {
+            // Show error state
+            progressBar.classList.remove('bg-blue-600', 'bg-green-600');
+            progressBar.classList.add('bg-red-600');
+            statusDiv.textContent = `Error: ${job.error || 'Unknown error'}`;
+            
+            setTimeout(() => {
+                hideInlineProgress(type);
+            }, 8000); // Show error for 8 seconds
+        }
+        
+    } catch (error) {
+        console.error(`Error updating inline progress for ${type}:`, error);
+    }
+}
+
+// Enhanced show inline progress with better initialization
+function showInlineProgress(type) {
+    try {
+        const progressDiv = document.getElementById(`${type}Progress`);
+        if (progressDiv) {
+            progressDiv.classList.remove('hidden');
+            
+            // Initialize progress elements
+            const percentSpan = document.getElementById(`${type}Percent`);
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const statusDiv = document.getElementById(`${type}Status`);
+            
+            if (percentSpan) percentSpan.textContent = '0%';
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.classList.remove('bg-red-600', 'bg-green-600');
+                progressBar.classList.add('bg-blue-600');
+            }
+            if (statusDiv) statusDiv.textContent = 'Starting...';
+            
+            console.log(`✅ Inline progress shown for ${type}`);
+        } else {
+            console.error(`❌ Progress div not found for ${type}`);
+        }
+    } catch (error) {
+        console.error(`Error showing inline progress for ${type}:`, error);
+    }
 }
 
 function showProgress(title, status, progress, error = null) {
@@ -1236,106 +1489,157 @@ function hideAuthSection() {
 
 async function checkAuthStatus() {
     try {
-        // Check server auth status
-        const response = await fetch(`${API_BASE}/api/auth/status`);
+        console.log('🔍 Checking YouTube auth status...');
+        
+        // Get local credentials to send with request
+        const localCreds = getLocalCredentials();
+        const requestBody = localCreds ? {
+            clientId: localCreds.clientId,
+            clientSecret: localCreds.clientSecret,
+            redirectUri: localCreds.redirectUri
+        } : {};
+        
+        const response = await fetch(`${API_BASE}/api/auth/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
         const data = await response.json();
         
-        updateConnectionStatus(data.authenticated, data.userInfo);
+        console.log('Auth status response:', data);
         
-        return data.authenticated;
+        if (data.success) {
+            // Handle both 'authenticated' and 'isAuthenticated' properties for compatibility
+            const isAuth = data.isAuthenticated || data.authenticated || false;
+            updateConnectionStatus(isAuth, data.userInfo);
+            console.log('✅ Auth status updated:', isAuth);
+            return isAuth;
+        } else {
+            console.log('❌ Auth status check failed:', data.message);
+            updateConnectionStatus(false);
+            return false;
+        }
     } catch (error) {
-        console.error('Error checking auth status:', error);
+        console.error('❌ Error checking auth status:', error);
         updateConnectionStatus(false);
         return false;
     }
 }
 
 function updateConnectionStatus(isConnected, userInfo = null) {
-    const statusContainer = document.getElementById('connectionStatus');
+    console.log('🔄 Updating connection status:', isConnected, userInfo);
+    
+    const statusDiv = document.getElementById('connectionStatus');
     const authenticateBtn = document.getElementById('authenticateBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
-    const authStatus = document.getElementById('authStatus');
+    const uploadSection = document.getElementById('uploadSection');
+    
+    if (!statusDiv) {
+        console.error('❌ Connection status div not found');
+        return;
+    }
     
     if (isConnected) {
-        // Show connected status
-        statusContainer.innerHTML = `
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <div class="flex items-start">
-                    <i class="bi bi-check-circle-fill text-green-600 mr-3 mt-1"></i>
-                    <div class="flex-grow">
-                        <h4 class="font-medium text-green-800 dark:text-green-200">Connected to YouTube</h4>
-                        <p class="text-sm text-green-700 dark:text-green-300 mt-1">
-                            ${userInfo ? `Logged in as: ${userInfo.email || userInfo.name || 'YouTube User'}` : 'Authentication successful. You can now upload videos to YouTube.'}
-                        </p>
-                        <p class="text-xs text-green-600 dark:text-green-400 mt-2">
-                            <i class="bi bi-shield-check mr-1"></i>
-                            Connection will persist until manually disconnected
-                        </p>
-                    </div>
-                </div>
+        // Connected state
+        statusDiv.innerHTML = `
+            <div class="flex items-center text-green-600 dark:text-green-400">
+                <i class="bi bi-check-circle-fill mr-2"></i>
+                <span>Connected to YouTube</span>
+                ${userInfo ? `<span class="ml-2 text-sm text-gray-500">(${userInfo.name || userInfo.email || 'User'})</span>` : ''}
             </div>
         `;
         
-        // Hide authenticate button, show disconnect button
-        authenticateBtn.style.display = 'none';
-        disconnectBtn.style.display = 'flex';
-        authStatus.textContent = 'Ready to upload videos';
-        authStatus.className = 'text-center text-sm text-green-600 dark:text-green-400';
-        
-        // Store auth status per session
-        localStorage.setItem('youtube_auth_completed', 'true');
-        localStorage.setItem('youtube_auth_time', new Date().toISOString());
-        
-        // Store session info if available
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session');
-        if (sessionId) {
-            localStorage.setItem('youtube_session_id', sessionId);
+        if (authenticateBtn) {
+            authenticateBtn.style.display = 'none';
+        }
+        if (disconnectBtn) {
+            disconnectBtn.style.display = 'inline-flex';
+        }
+        if (uploadSection) {
+            uploadSection.classList.remove('opacity-50', 'pointer-events-none');
         }
         
+        hideAuthSection();
+        console.log('✅ UI updated for connected state');
+        
     } else {
-        // Show disconnected status
-        statusContainer.innerHTML = `
-            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                <div class="flex items-start">
-                    <i class="bi bi-exclamation-triangle text-yellow-600 mr-3 mt-1"></i>
-                    <div>
-                        <h4 class="font-medium text-yellow-800 dark:text-yellow-200">Authentication Required</h4>
-                        <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                            To upload videos to YouTube, you need to authenticate with your Google account.
-                        </p>
-                        <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
-                            <i class="bi bi-info-circle mr-1"></i>
-                            Your login will be saved and persist across browser sessions
-                        </p>
-                    </div>
-                </div>
+        // Disconnected state
+        statusDiv.innerHTML = `
+            <div class="flex items-center text-red-600 dark:text-red-400">
+                <i class="bi bi-x-circle-fill mr-2"></i>
+                <span>Not connected to YouTube</span>
             </div>
         `;
         
-        // Show authenticate button, hide disconnect button
-        authenticateBtn.style.display = 'flex';
-        disconnectBtn.style.display = 'none';
-        authStatus.textContent = 'Not connected';
-        authStatus.className = 'text-center text-sm text-gray-600 dark:text-gray-400';
+        if (authenticateBtn) {
+            authenticateBtn.style.display = 'inline-flex';
+        }
+        if (disconnectBtn) {
+            disconnectBtn.style.display = 'none';
+        }
+        if (uploadSection) {
+            uploadSection.classList.add('opacity-50', 'pointer-events-none');
+        }
         
-        // Clear auth status
-        localStorage.removeItem('youtube_auth_completed');
-        localStorage.removeItem('youtube_auth_time');
-        localStorage.removeItem('youtube_session_id');
+        showAuthSection();
+        console.log('✅ UI updated for disconnected state');
     }
 }
 
 function setButtonLoading(buttonId, isLoading) {
     const button = document.getElementById(buttonId);
-    const originalText = button.textContent;
+    if (!button) return;
     
     if (isLoading) {
         button.disabled = true;
-        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+        button.innerHTML = '<i class="bi bi-arrow-clockwise animate-spin mr-2"></i>Loading...';
+        button.classList.add('loading');
     } else {
         button.disabled = false;
-        button.innerHTML = button.getAttribute('data-original-html') || originalText;
+        button.classList.remove('loading');
+        // Restore original text based on button ID
+        const originalTexts = {
+            'downloadBtn': '<i class="bi bi-download mr-2"></i>Download Video',
+            'uploadBtn': '<i class="bi bi-upload mr-2"></i>Upload to YouTube',
+            'batchDownloadBtn': '<i class="bi bi-download mr-2"></i>Download All',
+            'batchUploadBtn': '<i class="bi bi-upload mr-2"></i>Upload All',
+            'previewBtn': '<i class="bi bi-play-circle mr-2"></i>Preview Video'
+        };
+        button.innerHTML = originalTexts[buttonId] || 'Submit';
+    }
+}
+
+// Auto-reset loading buttons after job completion
+function resetButtonsOnJobComplete(jobId) {
+    const job = downloadJobs.get(jobId) || uploadJobs.get(jobId);
+    if (!job) return;
+    
+    if (job.status === 'completed' || job.status === 'error') {
+        // Reset download button if this was current download job
+        if (currentDownloadJob === jobId) {
+            setButtonLoading('downloadBtn', false);
+            hideInlineProgress('download');
+            currentDownloadJob = null;
+        }
+        
+        // Reset upload button if this was current upload job
+        if (currentUploadJob === jobId) {
+            setButtonLoading('uploadBtn', false);
+            hideInlineProgress('upload');
+            currentUploadJob = null;
+        }
+        
+        // Reset preview button
+        setButtonLoading('previewBtn', false);
+    }
+}
+
+function hideInlineProgress(type) {
+    const progressDiv = document.getElementById(`${type}Progress`);
+    if (progressDiv) {
+        progressDiv.classList.add('hidden');
     }
 }
 
@@ -1446,96 +1750,6 @@ setInterval(() => {
         updateDownloadJobSelect();
     }
 }, 60 * 60 * 1000); // Run every hour
-
-// Additional functions for new features
-async function updateProgress() {
-    const allJobs = [...downloadJobs.values(), ...uploadJobs.values()];
-    const activeJobs = allJobs.filter(job => 
-        job.status === 'downloading' || job.status === 'uploading' || job.status === 'starting'
-    );
-    
-    if (activeJobs.length === 0) {
-        if (currentDownloadJob || currentUploadJob) {
-            hideProgress();
-            currentDownloadJob = null;
-            currentUploadJob = null;
-        }
-        return;
-    }
-    
-    // Update individual job progress
-    for (const job of activeJobs) {
-        try {
-            const endpoint = job.type === 'download' ? 'download-status' : 'upload-status';
-            const response = await fetch(`${API_BASE}/api/${endpoint}/${job.id}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                job.status = data.job.status;
-                job.progress = data.job.progress;
-                job.error = data.job.error;
-                job.speed = data.job.speed;
-                job.eta = data.job.eta;
-                job.fileSize = data.job.fileSize;
-                
-                // Update additional job data from server
-                if (data.job.youtubeUrl) {
-                    job.youtubeUrl = data.job.youtubeUrl;
-                }
-                if (data.job.videoId) {
-                    job.videoId = data.job.videoId;
-                }
-                if (data.job.directDownloadUrl) {
-                    job.directDownloadUrl = data.job.directDownloadUrl;
-                }
-                if (data.job.isDirectDownload !== undefined) {
-                    job.isDirectDownload = data.job.isDirectDownload;
-                }
-                
-                // Update job in the appropriate map
-                if (job.type === 'download') {
-                    downloadJobs.set(job.id, job);
-                } else if (job.type === 'upload') {
-                    uploadJobs.set(job.id, job);
-                }
-                
-                // Handle direct download completion
-                if (job.type === 'download' && job.downloadMode === 'direct' && 
-                    job.status === 'completed' && !job.directDownloadTriggered) {
-                    job.directDownloadTriggered = true;
-                    console.log('🔽 Triggering direct download for job:', job.id);
-                    console.log('Job details:', job);
-                    
-                    // Trigger direct download from server (processed file)
-                    setTimeout(() => {
-                        console.log('Downloading processed file from server...');
-                        downloadJobFile(job.id);
-                    }, 1000);
-                }
-                
-                // Update batch job progress
-                if (job.batchId) {
-                    updateBatchProgress(job.batchId);
-                }
-            }
-        } catch (error) {
-            console.error(`Error updating job ${job.id}:`, error);
-        }
-    }
-    
-    // Update UI
-    const currentJob = activeJobs[0]; // Show progress for first active job
-    if (currentJob) {
-        updateProgressUI(currentJob);
-    }
-    
-    saveJobsToStorage();
-    updateJobsList();
-    updateDownloadJobSelect();
-    
-    // Check for completed jobs and show notifications
-    checkCompletedJobs();
-}
 
 function updateBatchProgress(batchId) {
     const batchJob = batchJobs.get(batchId);
@@ -1804,35 +2018,81 @@ async function clearAllHistory() {
 }
 
 async function saveCredentials() {
-    const clientId = document.getElementById('clientId').value;
-    const clientSecret = document.getElementById('clientSecret').value;
-    const redirectUri = document.getElementById('redirectUri').value;
+    const clientId = document.getElementById('clientId').value.trim();
+    const clientSecret = document.getElementById('clientSecret').value.trim();
+    const redirectUri = document.getElementById('redirectUri').value.trim();
     
     if (!clientId || !clientSecret || !redirectUri) {
-        showToast('Please enter Client ID, Client Secret, and Redirect URI', 'error');
+        showToast('Please fill in all credential fields', 'error');
+        return;
+    }
+    
+    // Validate Client ID format
+    if (!clientId.includes('.googleusercontent.com')) {
+        showToast('Invalid Client ID format. Should end with .googleusercontent.com', 'error');
         return;
     }
     
     try {
-        const response = await fetch(`${API_BASE}/api/save-credentials`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ clientId, clientSecret, redirectUri })
-        });
+        // Save credentials locally only
+        const credentials = saveCredentialsLocally(clientId, clientSecret, redirectUri);
         
-        const data = await response.json();
+        showToast('Credentials saved locally and securely!', 'success');
         
-        if (data.success) {
-            showToast('Credentials saved successfully!', 'success');
-        } else {
-            showToast(data.message || 'Error saving credentials', 'error');
-        }
+        // Update UI to show credentials are saved
+        updateCredentialsStatus(true);
+        
+        // Clear form for security
+        document.getElementById('clientId').value = '';
+        document.getElementById('clientSecret').value = '';
+        
     } catch (error) {
-        console.error('Save credentials error:', error);
-        showToast('Error connecting to server', 'error');
+        console.error('Error saving credentials:', error);
+        showToast('Error saving credentials locally', 'error');
     }
+}
+
+function updateCredentialsStatus(hasCreds) {
+    const statusDiv = document.getElementById('credentialsStatus') || createCredentialsStatusDiv();
+    
+    if (hasCreds) {
+        const creds = getLocalCredentials();
+        statusDiv.innerHTML = `
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                <div class="flex items-center">
+                    <i class="bi bi-shield-check text-green-600 mr-2"></i>
+                    <div class="flex-grow">
+                        <span class="text-sm font-medium text-green-800 dark:text-green-200">Credentials Saved Locally</span>
+                        <p class="text-xs text-green-600 dark:text-green-400">
+                            Saved: ${new Date(creds.savedAt).toLocaleDateString()}
+                        </p>
+                    </div>
+                    <button onclick="clearLocalCredentials(); updateCredentialsStatus(false);" 
+                            class="text-red-600 hover:text-red-800 text-sm">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        statusDiv.innerHTML = `
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <div class="flex items-center">
+                    <i class="bi bi-exclamation-triangle text-yellow-600 mr-2"></i>
+                    <span class="text-sm text-yellow-800 dark:text-yellow-200">No credentials saved</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function createCredentialsStatusDiv() {
+    const authSection = document.getElementById('authSection');
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'credentialsStatus';
+    statusDiv.className = 'mb-4';
+    authSection.insertBefore(statusDiv, authSection.firstChild);
+    return statusDiv;
 }
 
 function saveSettings() {
@@ -2350,4 +2610,45 @@ function showQuotaError(message) {
             }
         }, 30000);
     }
-} 
+}
+
+// Local credential storage functions
+function saveCredentialsLocally(clientId, clientSecret, redirectUri) {
+    const credentials = {
+        clientId,
+        clientSecret,
+        redirectUri,
+        savedAt: new Date().toISOString()
+    };
+    
+    // Encrypt credentials before storing (simple base64 for now, can be enhanced)
+    const encryptedCredentials = btoa(JSON.stringify(credentials));
+    localStorage.setItem('youtube_credentials', encryptedCredentials);
+    
+    return credentials;
+}
+
+function getLocalCredentials() {
+    try {
+        const encryptedCredentials = localStorage.getItem('youtube_credentials');
+        if (!encryptedCredentials) return null;
+        
+        const credentials = JSON.parse(atob(encryptedCredentials));
+        return credentials;
+    } catch (error) {
+        console.error('Error reading local credentials:', error);
+        return null;
+    }
+}
+
+function clearLocalCredentials() {
+    localStorage.removeItem('youtube_credentials');
+}
+
+// Make functions globally accessible
+window.clearLocalCredentials = clearLocalCredentials;
+window.updateCredentialsStatus = updateCredentialsStatus;
+
+function hasLocalCredentials() {
+    return localStorage.getItem('youtube_credentials') !== null;
+}

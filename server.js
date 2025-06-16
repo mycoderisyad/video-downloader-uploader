@@ -22,7 +22,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       mediaSrc: ["'self'", "https:", "blob:", "data:"],
-      connectSrc: ["'self'", "https://www.googleapis.com", "https://cdn.jsdelivr.net"],
+      connectSrc: ["'self'", "https://www.googleapis.com", "https://cdn.jsdelivr.net", "http://127.0.0.1:3031", "http://localhost:3031"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],
@@ -35,7 +35,7 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-  origin: ['https://prafunschool.web.id', 'http://localhost:3031'],
+  origin: ['https://prafunschool.web.id', 'http://localhost:3031', 'http://127.0.0.1:3031'],
   credentials: true
 }));
 
@@ -72,6 +72,7 @@ app.get('/api/download-status/:jobId', videoController.getDownloadStatus);
 app.get('/api/upload-status/:jobId', youtubeController.getUploadStatus);
 app.delete('/api/cleanup/:jobId', videoController.cleanupFiles);
 app.get('/api/auth/youtube', youtubeController.initiateAuth);
+app.post('/api/auth/youtube', youtubeController.initiateAuth);
 app.get('/api/auth/youtube/callback', youtubeController.handleCallback);
 
 // New API Routes
@@ -79,6 +80,7 @@ app.post('/api/preview', videoController.previewVideo);
 app.get('/api/download-file/:jobId', videoController.downloadFile);
 app.post('/api/save-credentials', youtubeController.saveCredentials);
 app.get('/api/auth/status', youtubeController.getAuthStatus);
+app.post('/api/auth/status', youtubeController.getAuthStatus);
 app.post('/api/auth/disconnect', youtubeController.disconnectAuth);
 app.post('/api/auth/refresh', youtubeController.refreshAuth);
 app.delete('/api/clear-all', videoController.clearAllFiles);
