@@ -1434,12 +1434,12 @@ async function updateProgress() {
                     
                     // Handle direct download completion
                     if (job.type === 'download' && job.downloadMode === 'direct' && 
-                        job.status === 'completed' && !job.directDownloadTriggered) {
+                        job.status === 'completed' && !job.directDownloadTriggered && !job.manualDownloadTriggered) {
                         job.directDownloadTriggered = true;
-                        console.log('🔽 Triggering direct download for job:', job.id);
+                        console.log('🔽 Auto-triggering direct download for job:', job.id);
                         
                         setTimeout(() => {
-                            downloadJobFile(job.id);
+                            downloadJobFile(job.id, 'auto');
                         }, 1000);
                     }
                     
@@ -1776,8 +1776,35 @@ function createJobElement(job) {
         if (downloadBtn) {
             downloadBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                console.log('🔽 Download button clicked for job:', job.id);
-                downloadJobFile(job.id);
+                e.stopPropagation();
+                
+                // Prevent double clicks
+                if (downloadBtn.disabled) {
+                    console.log('⚠️ Button already disabled, ignoring click');
+                    return;
+                }
+                
+                console.log('🔽 Manual download button clicked for job:', job.id);
+                
+                // Disable button temporarily to prevent double clicks
+                downloadBtn.disabled = true;
+                downloadBtn.innerHTML = '<i class="bi bi-arrow-clockwise animate-spin"></i> Downloading...';
+                
+                // Re-enable button after 3 seconds
+                setTimeout(() => {
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = '<i class="bi bi-download"></i> Download';
+                }, 3000);
+                
+                // Mark as manual download to prevent auto-trigger
+                const currentJob = downloadJobs.get(job.id);
+                if (currentJob) {
+                    currentJob.manualDownloadTriggered = true;
+                    downloadJobs.set(job.id, currentJob);
+                    saveJobsToStorage();
+                }
+                
+                downloadJobFile(job.id, 'manual');
             });
         }
         
@@ -2702,8 +2729,23 @@ window.deleteJob = async function(jobId, jobType) {
     }
 };
 
-window.downloadJobFile = async function(jobId) {
-    console.log('🔽 downloadJobFile called with jobId:', jobId);
+window.downloadJobFile = async function(jobId, trigger = 'unknown') {
+    console.log('🔽 downloadJobFile called with jobId:', jobId, 'trigger:', trigger);
+    
+    // Prevent multiple simultaneous downloads for the same job
+    if (window.activeDownloads && window.activeDownloads.has(jobId)) {
+        console.log('⚠️ Download already in progress for job:', jobId);
+        showToast('Download sudah dalam proses!', 'warning');
+        return;
+    }
+    
+    // Initialize active downloads tracker
+    if (!window.activeDownloads) {
+        window.activeDownloads = new Set();
+    }
+    
+    // Mark download as active
+    window.activeDownloads.add(jobId);
     
     try {
         // Get job details from all possible sources
@@ -2772,6 +2814,11 @@ window.downloadJobFile = async function(jobId) {
     } catch (error) {
         console.error('Error downloading file:', error);
         showToast('Error download file: ' + error.message, 'error');
+    } finally {
+        // Remove from active downloads
+        if (window.activeDownloads) {
+            window.activeDownloads.delete(jobId);
+        }
     }
 };
 
