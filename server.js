@@ -68,6 +68,7 @@ app.get('/', (req, res) => {
 // API Routes
 app.post('/api/download', videoController.downloadVideo);
 app.post('/api/upload-youtube', youtubeController.uploadToYoutube);
+app.post('/api/upload-via-link', youtubeController.uploadViaLink);
 app.get('/api/download-status/:jobId', videoController.getDownloadStatus);
 app.get('/api/upload-status/:jobId', youtubeController.getUploadStatus);
 app.delete('/api/cleanup/:jobId', videoController.cleanupFiles);

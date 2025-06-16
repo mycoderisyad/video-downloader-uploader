@@ -222,6 +222,96 @@ const handleCallback = async (req, res) => {
   }
 };
 
+// Upload via direct link (new feature)
+const uploadViaLink = async (req, res) => {
+  try {
+    const {
+      url,
+      title,
+      description = '',
+      tags = [],
+      category = '22', // People & Blogs
+      privacy = 'private',
+      quality = 'best'
+    } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: 'Video URL diperlukan'
+      });
+    }
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Video title diperlukan'
+      });
+    }
+
+    // Check authentication first
+    const userSessionId = getUserSessionId(req);
+    const userTokenData = userTokens.get(userSessionId);
+    
+    if (!userTokenData) {
+      return res.status(401).json({
+        success: false,
+        message: 'YouTube authentication required. Please authenticate first.',
+        requireAuth: true
+      });
+    }
+
+    // Create combined job ID for tracking both download and upload
+    const combinedJobId = uuidv4();
+    
+    // Create upload job with initial status
+    uploadJobs.set(combinedJobId, {
+      status: 'downloading', // First phase: downloading
+      progress: 0,
+      downloadUrl: url,
+      title: title.trim(),
+      description,
+      tags,
+      category,
+      privacy,
+      quality,
+      startTime: new Date(),
+      error: null,
+      videoId: null,
+      userSessionId: userSessionId,
+      type: 'direct-upload', // Mark as direct upload
+      phase: 'download' // Current phase
+    });
+
+    // Send immediate response
+    res.json({
+      success: true,
+      jobId: combinedJobId,
+      uploadJobId: combinedJobId,
+      message: 'Direct upload started - downloading video first',
+      status: 'downloading'
+    });
+
+    // Start the download-then-upload process asynchronously
+    startDirectUploadProcess(combinedJobId, url, {
+      title: title.trim(),
+      description,
+      tags,
+      category,
+      privacy,
+      quality
+    }, userSessionId);
+
+  } catch (error) {
+    logger.error('Error in uploadViaLink:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error memulai direct upload',
+      error: error.message
+    });
+  }
+};
+
 const uploadToYoutube = async (req, res) => {
   try {
     const {
@@ -326,7 +416,140 @@ const uploadToYoutube = async (req, res) => {
   }
 };
 
-const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionId) => {
+// Process for direct upload: download then upload then cleanup
+const startDirectUploadProcess = async (jobId, url, metadata, userSessionId) => {
+  const sanitize = require('sanitize-filename');
+  const { spawn } = require('child_process');
+  
+  try {
+    // Update status to downloading
+    updateUploadStatus(jobId, 'downloading', 0);
+    
+    // Create temporary file path
+    const sanitizedTitle = sanitize(metadata.title || `direct_upload_${Date.now()}`);
+    const tempVideoPath = path.join(__dirname, '../temp', `${sanitizedTitle}_${jobId}.mp4`);
+    
+    // Ensure temp directory exists
+    await fs.ensureDir(path.dirname(tempVideoPath));
+    
+    logger.info(`Starting direct upload process for job ${jobId}: ${url}`);
+    
+    // Download video using yt-dlp
+    const downloadPromise = new Promise((resolve, reject) => {
+      const args = [
+        '--format', getYtDlpFormat(metadata.quality),
+        '--output', tempVideoPath,
+        '--no-playlist',
+        '--no-warnings',
+        '--progress',
+        url
+      ];
+      
+      const ytDlp = spawn('yt-dlp', args);
+      
+      ytDlp.stdout.on('data', (data) => {
+        const output = data.toString();
+        parseDirectUploadProgress(jobId, output, 'download');
+      });
+      
+      ytDlp.stderr.on('data', (data) => {
+        const output = data.toString();
+        if (output.includes('%')) {
+          parseDirectUploadProgress(jobId, output, 'download');
+        }
+      });
+      
+      ytDlp.on('close', (code) => {
+        if (code === 0) {
+          logger.info(`Download completed for direct upload job ${jobId}`);
+          resolve(tempVideoPath);
+        } else {
+          reject(new Error(`Download failed with code ${code}`));
+        }
+      });
+      
+      ytDlp.on('error', (error) => {
+        reject(new Error(`Download process error: ${error.message}`));
+      });
+    });
+    
+    // Wait for download to complete
+    const downloadedPath = await downloadPromise;
+    
+    // Verify file exists and has content
+    if (!await fs.pathExists(downloadedPath)) {
+      throw new Error('Downloaded file not found');
+    }
+    
+    const fileStats = await fs.stat(downloadedPath);
+    if (fileStats.size === 0) {
+      throw new Error('Downloaded file is empty');
+    }
+    
+    logger.info(`Download completed, file size: ${fileStats.size} bytes`);
+    
+    // Update status to uploading
+    const uploadJob = uploadJobs.get(jobId);
+    if (uploadJob) {
+      uploadJob.phase = 'upload';
+      uploadJob.status = 'uploading';
+      uploadJob.progress = 0;
+      uploadJob.downloadedPath = downloadedPath;
+    }
+    
+    // Start YouTube upload
+    await startYouTubeUpload(jobId, downloadedPath, metadata, userSessionId, true); // true = cleanup after upload
+    
+  } catch (error) {
+    logger.error(`Direct upload process failed for job ${jobId}:`, error);
+    updateUploadStatus(jobId, 'error', 0, error.message);
+    
+    // Cleanup on error
+    const uploadJob = uploadJobs.get(jobId);
+    if (uploadJob && uploadJob.downloadedPath) {
+      try {
+        await fs.unlink(uploadJob.downloadedPath);
+        logger.info(`Cleaned up failed download file: ${uploadJob.downloadedPath}`);
+      } catch (cleanupError) {
+        logger.error(`Error cleaning up file: ${cleanupError.message}`);
+      }
+    }
+  }
+};
+
+// Helper function to parse download progress for direct upload
+const parseDirectUploadProgress = (jobId, output, phase) => {
+  const lines = output.split('\n');
+  for (const line of lines) {
+    if (line.includes('%') && phase === 'download') {
+      const percentMatch = line.match(/(\d+\.?\d*)%/);
+      if (percentMatch) {
+        const percent = parseFloat(percentMatch[1]);
+        // For download phase, use 0-50% of total progress
+        const adjustedProgress = Math.min(50, percent / 2);
+        updateUploadStatus(jobId, 'downloading', adjustedProgress);
+      }
+    }
+  }
+};
+
+// Helper function to get yt-dlp format string
+const getYtDlpFormat = (quality) => {
+  switch (quality) {
+    case '1080p':
+      return 'best[height<=1080]';
+    case '720p':
+      return 'best[height<=720]';
+    case '480p':
+      return 'best[height<=480]';
+    case '360p':
+      return 'best[height<=360]';
+    default:
+      return 'best';
+  }
+};
+
+const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionId, cleanupAfter = false) => {
   try {
     updateUploadStatus(uploadJobId, 'uploading', 0);
 
@@ -437,7 +660,14 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionI
     // Track upload progress
     const progressInterval = setInterval(() => {
       if (uploadedBytes > 0) {
-        const progress = (uploadedBytes / fileSize) * 100;
+        let progress = (uploadedBytes / fileSize) * 100;
+        
+        // For direct upload, adjust progress to 50-100% range (download was 0-50%)
+        const uploadJob = uploadJobs.get(uploadJobId);
+        if (uploadJob && uploadJob.type === 'direct-upload') {
+          progress = 50 + (progress / 2); // Map 0-100% upload to 50-100% total
+        }
+        
         updateUploadStatus(uploadJobId, 'uploading', progress);
       }
     }, 1000);
@@ -450,6 +680,16 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionI
     if (response.data && response.data.id) {
       updateUploadStatus(uploadJobId, 'completed', 100, null, response.data.id);
       logger.info(`YouTube upload completed for job ${uploadJobId}, video ID: ${response.data.id}`);
+      
+      // Cleanup temporary file if this was a direct upload
+      if (cleanupAfter) {
+        try {
+          await fs.unlink(videoPath);
+          logger.info(`Cleaned up temporary file after successful upload: ${videoPath}`);
+        } catch (cleanupError) {
+          logger.error(`Error cleaning up temporary file: ${cleanupError.message}`);
+        }
+      }
     } else {
       throw new Error('Upload completed but no video ID returned');
     }
@@ -539,6 +779,16 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionI
     }
     
     updateUploadStatus(uploadJobId, 'error', 0, errorMessage);
+    
+    // Cleanup temporary file if this was a direct upload and there was an error
+    if (cleanupAfter) {
+      try {
+        await fs.unlink(videoPath);
+        logger.info(`Cleaned up temporary file after upload error: ${videoPath}`);
+      } catch (cleanupError) {
+        logger.error(`Error cleaning up temporary file after error: ${cleanupError.message}`);
+      }
+    }
   }
 };
 
@@ -939,6 +1189,7 @@ module.exports = {
   initiateAuth,
   handleCallback,
   uploadToYoutube,
+  uploadViaLink,
   getUploadStatus,
   saveCredentials,
   getAuthStatus,

@@ -340,12 +340,81 @@
 
         <!-- Upload Tab -->
         <div id="uploadTab" class="tab-content">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Upload via Link (NEW) -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center">
+                        <i class="bi bi-link-45deg mr-3 text-green-600"></i>
+                        Upload via Link
+                    </h2>
+                    
+                    <form id="uploadViaLinkForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Video URL</label>
+                            <input type="url" id="directUploadUrl" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Paste video URL here..." required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">YouTube Title</label>
+                            <input type="text" id="directUploadTitle" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter YouTube title" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Description</label>
+                            <textarea id="directUploadDescription" rows="3" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter video description"></textarea>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Quality</label>
+                                <select id="directUploadQuality" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                    <option value="best">Best Quality</option>
+                                    <option value="1080p">1080p</option>
+                                    <option value="720p">720p</option>
+                                    <option value="480p">480p</option>
+                                    <option value="360p">360p</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Privacy</label>
+                                <select id="directUploadPrivacy" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                    <option value="private">Private</option>
+                                    <option value="unlisted">Unlisted</option>
+                                    <option value="public">Public</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Tags (comma separated)</label>
+                            <input type="text" id="directUploadTags" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="tag1, tag2, tag3">
+                        </div>
+                        
+                        <button type="submit" id="directUploadBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
+                            <i class="bi bi-cloud-arrow-up mr-2"></i>Download & Upload
+                        </button>
+                        
+                        <!-- Direct Upload Progress Indicator -->
+                        <div id="directUploadProgress" class="mt-4 hidden">
+                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-green-800 dark:text-green-200" id="directUploadPhase">Downloading...</span>
+                                    <span id="directUploadPercent" class="text-sm text-green-600 dark:text-green-400">0%</span>
+                                </div>
+                                <div class="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
+                                    <div id="directUploadProgressBar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="directUploadStatus" class="text-xs text-green-600 dark:text-green-400 mt-2">Starting...</div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
                 <!-- Single Upload -->
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                     <h2 class="text-2xl font-bold mb-6 flex items-center">
                         <i class="bi bi-upload mr-3 text-primary-600"></i>
-                        Single Upload
+                        Upload Downloaded
                     </h2>
                     
                     <!-- Drag & Drop Area -->
@@ -705,12 +774,6 @@
     <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">
         <!-- Toast notifications will be added here -->
     </div>
-
-    <!-- Single Corner Ad - Pojok Kanan Bawah -->
-    <div id="cornerAd" class="fixed bottom-4 right-4 z-40 w-48 h-32">
-        <!-- Ad akan dimuat oleh ads-manager.js -->
-    </div>
-    <script src="ads-manager.js"></script>
     <script src="app.js"></script>
 </body>
 </html> 
