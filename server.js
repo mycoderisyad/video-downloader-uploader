@@ -65,6 +65,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// API Documentation route
+app.get('/api-docs', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'api-docs.html'));
+});
+
 // API Routes
 app.post('/api/download', videoController.downloadVideo);
 app.post('/api/upload-youtube', youtubeController.uploadToYoutube);

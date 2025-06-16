@@ -235,12 +235,18 @@ function setupEventListeners() {
             console.log('✅ Batch upload form listener added');
         }
         
-        // Upload via link form
-        const uploadViaLinkForm = document.getElementById('uploadViaLinkForm');
-        if (uploadViaLinkForm) {
-            uploadViaLinkForm.addEventListener('submit', handleUploadViaLink);
-            console.log('✅ Upload via link form listener added');
+        // Multi-mode upload form
+        const multiModeUploadForm = document.getElementById('multiModeUploadForm');
+        if (multiModeUploadForm) {
+            multiModeUploadForm.addEventListener('submit', handleMultiModeUpload);
+            console.log('✅ Multi-mode upload form listener added');
         }
+        
+        // Upload mode buttons
+        const modeButtons = document.querySelectorAll('.upload-mode-btn');
+        modeButtons.forEach(button => {
+            button.addEventListener('click', switchUploadMode);
+        });
         
         // Buttons
         if (authenticateBtn) {
@@ -812,20 +818,73 @@ async function handleBatchUpload(e) {
     }
 }
 
-async function handleUploadViaLink(e) {
+// Global variable to track current upload mode
+let currentUploadMode = 'viaLink';
+
+// Switch upload mode function
+function switchUploadMode(e) {
+    const clickedMode = e.target.closest('.upload-mode-btn').id.replace('mode', '').toLowerCase();
+    
+    // Update mode buttons
+    document.querySelectorAll('.upload-mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.add('bg-gray-200', 'dark:bg-gray-600', 'text-gray-700', 'dark:text-gray-300');
+    });
+    
+    e.target.closest('.upload-mode-btn').classList.add('active');
+    e.target.closest('.upload-mode-btn').classList.remove('bg-gray-200', 'dark:bg-gray-600', 'text-gray-700', 'dark:text-gray-300');
+    
+    // Hide all mode contents
+    document.querySelectorAll('.upload-mode-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Show selected mode content
+    let targetContent, buttonText, buttonIcon;
+    
+    switch(clickedMode) {
+        case 'vialink':
+            currentUploadMode = 'viaLink';
+            targetContent = 'viaLinkContent';
+            buttonText = 'Download & Upload';
+            buttonIcon = 'bi-cloud-arrow-up';
+            break;
+        case 'fromdownloaded':
+            currentUploadMode = 'fromDownloaded';
+            targetContent = 'fromDownloadedContent';
+            buttonText = 'Upload to YouTube';
+            buttonIcon = 'bi-youtube';
+            break;
+        case 'fromlocal':
+            currentUploadMode = 'fromLocal';
+            targetContent = 'fromLocalContent';
+            buttonText = 'Upload to YouTube';
+            buttonIcon = 'bi-upload';
+            break;
+    }
+    
+    document.getElementById(targetContent).classList.remove('hidden');
+    
+    // Update button text and icon
+    const uploadBtn = document.getElementById('multiModeUploadBtn');
+    const buttonTextSpan = document.getElementById('uploadButtonText');
+    const buttonIconElement = uploadBtn.querySelector('i');
+    
+    buttonTextSpan.textContent = buttonText;
+    buttonIconElement.className = `${buttonIcon} mr-2`;
+    
+    console.log('✅ Upload mode switched to:', currentUploadMode);
+}
+
+// Multi-mode upload handler
+async function handleMultiModeUpload(e) {
     e.preventDefault();
     
-    const url = document.getElementById('directUploadUrl').value;
-    const title = document.getElementById('directUploadTitle').value;
-    const description = document.getElementById('directUploadDescription').value;
-    const quality = document.getElementById('directUploadQuality').value;
-    const privacy = document.getElementById('directUploadPrivacy').value;
-    const tags = document.getElementById('directUploadTags').value;
-    
-    if (!url) {
-        showToast('Please enter a video URL', 'error');
-        return;
-    }
+    const title = document.getElementById('youtubeTitle').value;
+    const description = document.getElementById('youtubeDescription').value;
+    const privacy = document.getElementById('privacy').value;
+    const category = document.getElementById('category').value;
+    const tags = document.getElementById('youtubeTags').value;
     
     if (!title.trim()) {
         showToast('Please enter a video title', 'error');
@@ -841,76 +900,174 @@ async function handleUploadViaLink(e) {
     }
     
     try {
-        setButtonLoading('directUploadBtn', true);
+        setButtonLoading('multiModeUploadBtn', true);
         
-        const response = await fetch(`${API_BASE}/api/upload-via-link`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                url: url.trim(),
-                title: title.trim(),
-                description: description.trim(),
-                quality,
-                privacy,
-                tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-                category: '22' // People & Blogs
-            })
+        if (currentUploadMode === 'viaLink') {
+            await handleViaLinkUpload(title, description, privacy, category, tags);
+        } else if (currentUploadMode === 'fromDownloaded') {
+            await handleFromDownloadedUpload(title, description, privacy, category, tags);
+        } else if (currentUploadMode === 'fromLocal') {
+            await handleFromLocalUpload(title, description, privacy, category, tags);
+        }
+        
+    } catch (error) {
+        console.error('Multi-mode upload error:', error);
+        showToast('Error during upload process', 'error');
+    } finally {
+        setButtonLoading('multiModeUploadBtn', false);
+    }
+}
+
+// Via Link Upload Handler
+async function handleViaLinkUpload(title, description, privacy, category, tags) {
+    const url = document.getElementById('directUploadUrl').value;
+    const quality = document.getElementById('directUploadQuality').value;
+    
+    if (!url) {
+        showToast('Please enter a video URL', 'error');
+        return;
+    }
+    
+    const response = await fetch(`${API_BASE}/api/upload-via-link`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            url: url.trim(),
+            title: title.trim(),
+            description: description.trim(),
+            quality,
+            privacy,
+            tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+            category
+        })
+    });
+    
+    const data = await response.json();
+    console.log('Direct upload response:', data);
+    
+    if (data.success) {
+        const directUploadJobId = data.uploadJobId || data.jobId;
+        console.log('Direct upload job ID:', directUploadJobId);
+        
+        // Store direct upload job info
+        uploadJobs.set(directUploadJobId, {
+            id: directUploadJobId,
+            url: url.trim(),
+            title: title.trim(),
+            description: description.trim(),
+            quality,
+            privacy,
+            status: data.status || 'downloading',
+            progress: 0,
+            type: 'direct-upload',
+            phase: 'download',
+            timestamp: new Date().toISOString()
         });
         
-        const data = await response.json();
-        console.log('Direct upload response:', data);
+        currentUploadJob = directUploadJobId;
         
-        if (data.success) {
-            const directUploadJobId = data.uploadJobId || data.jobId;
-            console.log('Direct upload job ID:', directUploadJobId);
-            
-            // Store direct upload job info
-            uploadJobs.set(directUploadJobId, {
-                id: directUploadJobId,
-                url: url.trim(),
-                title: title.trim(),
-                description: description.trim(),
-                quality,
-                privacy,
-                status: data.status || 'downloading',
-                progress: 0,
-                type: 'direct-upload',
-                phase: 'download',
-                timestamp: new Date().toISOString()
-            });
-            
-            currentUploadJob = directUploadJobId;
-            
-            saveJobsToStorage();
-            showProgress('Direct Upload', 'downloading', 0);
-            showToast('Direct upload started! Downloading video first...', 'success');
-            showDirectUploadProgress();
-            
-            // Update inline progress immediately
-            updateDirectUploadProgress(uploadJobs.get(directUploadJobId));
-            
-            // Reset form
-            document.getElementById('uploadViaLinkForm').reset();
+        saveJobsToStorage();
+        showProgress('Direct Upload', 'downloading', 0);
+        showToast('Direct upload started! Downloading video first...', 'success');
+        showDirectUploadProgress();
+        
+        // Update inline progress immediately
+        updateDirectUploadProgress(uploadJobs.get(directUploadJobId));
+        
+        // Reset form
+        document.getElementById('multiModeUploadForm').reset();
+        // Reset to default mode
+        document.getElementById('modeViaLink').click();
+    } else {
+        if (data.requireAuth) {
+            showAuthSection();
+            showToast('Authentication required. Please authenticate with YouTube first.', 'warning');
+        } else if (data.message && data.message.includes('authentication')) {
+            showAuthErrorWithRefresh(data.message);
+        } else if (data.message && (data.message.includes('quota') || data.message.includes('limit') || data.message.includes('exceeded'))) {
+            showQuotaError(data.message);
         } else {
-            if (data.requireAuth) {
-                showAuthSection();
-                showToast('Authentication required. Please authenticate with YouTube first.', 'warning');
-            } else if (data.message && data.message.includes('authentication')) {
-                showAuthErrorWithRefresh(data.message);
-            } else if (data.message && (data.message.includes('quota') || data.message.includes('limit') || data.message.includes('exceeded'))) {
-                showQuotaError(data.message);
-            } else {
-                showToast(data.message || 'Error starting direct upload', 'error');
-            }
+            showToast(data.message || 'Error starting direct upload', 'error');
         }
-    } catch (error) {
-        console.error('Direct upload error:', error);
-        showToast('Error connecting to server', 'error');
-    } finally {
-        setButtonLoading('directUploadBtn', false);
     }
+}
+
+// From Downloaded Upload Handler
+async function handleFromDownloadedUpload(title, description, privacy, category, tags) {
+    const downloadJobId = document.getElementById('downloadJobSelect').value;
+    
+    if (!downloadJobId) {
+        showToast('Please select a downloaded video', 'error');
+        return;
+    }
+    
+    const response = await fetch(`${API_BASE}/api/upload-youtube`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            downloadJobId,
+            title: title.trim(),
+            description: description.trim(),
+            privacy,
+            category,
+            tags: tags ? tags.split(',').map(tag => tag.trim()) : []
+        })
+    });
+    
+    const data = await response.json();
+    console.log('Upload response:', data);
+    
+    if (data.success) {
+        const uploadJobId = data.uploadJobId || data.jobId;
+        console.log('Upload job ID:', uploadJobId);
+        
+        // Store upload job info
+        uploadJobs.set(uploadJobId, {
+            id: uploadJobId,
+            downloadJobId,
+            title: title.trim(),
+            description: description.trim(),
+            privacy,
+            category,
+            status: data.status || 'starting',
+            progress: 0,
+            type: 'upload',
+            timestamp: new Date().toISOString()
+        });
+        
+        currentUploadJob = uploadJobId;
+        
+        saveJobsToStorage();
+        showProgress('Upload', 'starting', 0);
+        showToast('Upload started successfully!', 'success');
+        showInlineProgress('upload');
+        
+        // Reset form
+        document.getElementById('multiModeUploadForm').reset();
+        // Reset to default mode
+        document.getElementById('modeViaLink').click();
+    } else {
+        if (data.requireAuth) {
+            showAuthSection();
+            showToast('Authentication required. Please authenticate with YouTube first.', 'warning');
+        } else if (data.message && data.message.includes('authentication')) {
+            showAuthErrorWithRefresh(data.message);
+        } else if (data.message && (data.message.includes('quota') || data.message.includes('limit') || data.message.includes('exceeded'))) {
+            showQuotaError(data.message);
+        } else {
+            showToast(data.message || 'Error starting upload', 'error');
+        }
+    }
+}
+
+// From Local Upload Handler (placeholder for future implementation)
+async function handleFromLocalUpload(title, description, privacy, category, tags) {
+    showToast('Local file upload feature coming soon!', 'info');
+    // TODO: Implement local file upload functionality
 }
 
 async function handlePreview() {
@@ -1764,7 +1921,8 @@ function setButtonLoading(buttonId, isLoading) {
             'uploadBtn': '<i class="bi bi-upload mr-2"></i>Upload to YouTube',
             'batchDownloadBtn': '<i class="bi bi-download mr-2"></i>Download All',
             'batchUploadBtn': '<i class="bi bi-upload mr-2"></i>Upload All',
-            'previewBtn': '<i class="bi bi-play-circle mr-2"></i>Preview Video'
+            'previewBtn': '<i class="bi bi-play-circle mr-2"></i>Preview Video',
+            'multiModeUploadBtn': '<i class="bi bi-cloud-arrow-up mr-2"></i><span id="uploadButtonText">Download & Upload</span>'
         };
         button.innerHTML = originalTexts[buttonId] || 'Submit';
     }
@@ -1786,7 +1944,9 @@ function resetButtonsOnJobComplete(jobId) {
         // Reset upload button if this was current upload job
         if (currentUploadJob === jobId) {
             setButtonLoading('uploadBtn', false);
+            setButtonLoading('multiModeUploadBtn', false);
             hideInlineProgress('upload');
+            hideDirectUploadProgress();
             currentUploadJob = null;
         }
         
@@ -1848,8 +2008,18 @@ function updateDirectUploadProgress(job) {
         } else if (job.status === 'uploading') {
             statusElement.textContent = 'Uploading video to YouTube...';
         } else if (job.status === 'completed') {
-            statusElement.textContent = 'Video successfully uploaded to YouTube!';
-            setTimeout(() => hideDirectUploadProgress(), 3000);
+            if (job.videoId) {
+                statusElement.innerHTML = `
+                    Video successfully uploaded to YouTube! 
+                    <a href="https://www.youtube.com/watch?v=${job.videoId}" target="_blank" 
+                       class="inline-flex items-center ml-2 px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors">
+                        <i class="bi bi-youtube mr-1"></i>View on YouTube
+                    </a>
+                `;
+            } else {
+                statusElement.textContent = 'Video successfully uploaded to YouTube!';
+            }
+            setTimeout(() => hideDirectUploadProgress(), 8000); // Extended time to see the button
         } else if (job.status === 'error') {
             statusElement.textContent = job.error || 'Upload failed';
             setTimeout(() => hideDirectUploadProgress(), 5000);

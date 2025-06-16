@@ -314,6 +314,18 @@ const uploadViaLink = async (req, res) => {
 
 const uploadToYoutube = async (req, res) => {
   try {
+    // Check authentication first
+    const userSessionId = getUserSessionId(req);
+    const userTokenData = userTokens.get(userSessionId);
+    
+    if (!userTokenData) {
+      return res.status(401).json({
+        success: false,
+        message: 'YouTube authentication required. Please authenticate first.',
+        requireAuth: true
+      });
+    }
+
     const {
       downloadJobId, // Frontend sends downloadJobId
       jobId, // Fallback for compatibility
@@ -354,18 +366,6 @@ const uploadToYoutube = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'File video tidak ditemukan'
-      });
-    }
-
-    // Get user session ID and check for stored tokens
-    const userSessionId = getUserSessionId(req);
-    const userTokenData = userTokens.get(userSessionId);
-    
-    if (!userTokenData) {
-      return res.status(401).json({
-        success: false,
-        message: 'YouTube authentication required. Please authenticate first.',
-        requireAuth: true
       });
     }
 

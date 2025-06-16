@@ -137,6 +137,33 @@
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
+        
+        /* Upload Mode Buttons */
+        .upload-mode-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .upload-mode-btn.active {
+            background-color: #059669 !important;
+            color: white !important;
+            box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);
+        }
+        
+        .upload-mode-btn:not(.active):hover {
+            background-color: #d1d5db;
+        }
+        
+        .dark .upload-mode-btn:not(.active):hover {
+            background-color: #4b5563;
+        }
+        
+        .upload-mode-content {
+            transition: opacity 0.2s ease;
+        }
+        
+        .upload-mode-content.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
@@ -168,6 +195,9 @@
                         <button class="tab-btn px-4 py-2 rounded-lg font-medium transition-colors" data-tab="settings">
                             <i class="bi bi-gear mr-2"></i>Settings
                         </button>
+                        <a href="/api-docs" target="_blank" class="px-4 py-2 rounded-lg font-medium transition-colors text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                            <i class="bi bi-code-square mr-2"></i>API Docs
+                        </a>
                     </div>
                 </div>
             </div>
@@ -340,99 +370,76 @@
 
         <!-- Upload Tab -->
         <div id="uploadTab" class="tab-content">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Upload via Link (NEW) -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-                    <h2 class="text-2xl font-bold mb-6 flex items-center">
-                        <i class="bi bi-link-45deg mr-3 text-green-600"></i>
-                        Upload via Link
-                    </h2>
-                    
-                    <form id="uploadViaLinkForm" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-2">Video URL</label>
-                            <input type="url" id="directUploadUrl" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Paste video URL here..." required>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium mb-2">YouTube Title</label>
-                            <input type="text" id="directUploadTitle" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter YouTube title" required>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium mb-2">Description</label>
-                            <textarea id="directUploadDescription" rows="3" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter video description"></textarea>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-2">Quality</label>
-                                <select id="directUploadQuality" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                                    <option value="best">Best Quality</option>
-                                    <option value="1080p">1080p</option>
-                                    <option value="720p">720p</option>
-                                    <option value="480p">480p</option>
-                                    <option value="360p">360p</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-2">Privacy</label>
-                                <select id="directUploadPrivacy" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                                    <option value="private">Private</option>
-                                    <option value="unlisted">Unlisted</option>
-                                    <option value="public">Public</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium mb-2">Tags (comma separated)</label>
-                            <input type="text" id="directUploadTags" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="tag1, tag2, tag3">
-                        </div>
-                        
-                        <button type="submit" id="directUploadBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
-                            <i class="bi bi-cloud-arrow-up mr-2"></i>Download & Upload
-                        </button>
-                        
-                        <!-- Direct Upload Progress Indicator -->
-                        <div id="directUploadProgress" class="mt-4 hidden">
-                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium text-green-800 dark:text-green-200" id="directUploadPhase">Downloading...</span>
-                                    <span id="directUploadPercent" class="text-sm text-green-600 dark:text-green-400">0%</span>
-                                </div>
-                                <div class="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
-                                    <div id="directUploadProgressBar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                                </div>
-                                <div id="directUploadStatus" class="text-xs text-green-600 dark:text-green-400 mt-2">Starting...</div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Single Upload -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Multi-Mode Upload -->
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                     <h2 class="text-2xl font-bold mb-6 flex items-center">
                         <i class="bi bi-upload mr-3 text-primary-600"></i>
-                        Upload Downloaded
+                        Upload to YouTube
                     </h2>
                     
-                    <!-- Drag & Drop Area -->
-                    <div id="dropZone" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center mb-6 transition-colors hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20">
-                        <i class="bi bi-cloud-upload text-4xl text-gray-400 mb-4"></i>
-                        <p class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">Drag & drop video files here</p>
-                        <p class="text-sm text-gray-500">or click to browse</p>
-                        <input type="file" id="fileInput" class="hidden" accept="video/*" multiple>
+                    <!-- Upload Mode Selector -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium mb-3">Upload Mode</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button type="button" id="modeViaLink" class="upload-mode-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                                <i class="bi bi-link-45deg mr-1"></i>Via Link
+                            </button>
+                            <button type="button" id="modeFromDownloaded" class="upload-mode-btn bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center">
+                                <i class="bi bi-folder mr-1"></i>Downloaded
+                            </button>
+                            <button type="button" id="modeFromLocal" class="upload-mode-btn bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center">
+                                <i class="bi bi-file-earmark mr-1"></i>Local File
+                            </button>
+                        </div>
                     </div>
                     
-                    <form id="uploadForm" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-2">Select Downloaded Video</label>
-                            <select id="downloadJobSelect" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                                <option value="">Choose video...</option>
-                            </select>
+                    <!-- Dynamic Upload Form -->
+                    <form id="multiModeUploadForm" class="space-y-4">
+                        <!-- Mode-specific content will be inserted here -->
+                        <div id="uploadModeContent">
+                            <!-- Via Link Mode (Default) -->
+                            <div id="viaLinkContent" class="upload-mode-content">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Video URL</label>
+                                    <input type="url" id="directUploadUrl" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Paste video URL here..." required>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Quality</label>
+                                    <select id="directUploadQuality" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                        <option value="best">Best Quality</option>
+                                        <option value="1080p">1080p</option>
+                                        <option value="720p">720p</option>
+                                        <option value="480p">480p</option>
+                                        <option value="360p">360p</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- From Downloaded Mode -->
+                            <div id="fromDownloadedContent" class="upload-mode-content hidden">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Select Downloaded Video</label>
+                                    <select id="downloadJobSelect" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                        <option value="">Choose video...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- From Local File Mode -->
+                            <div id="fromLocalContent" class="upload-mode-content hidden">
+                                <!-- Drag & Drop Area -->
+                                <div id="dropZone" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center transition-colors hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20">
+                                    <i class="bi bi-cloud-upload text-3xl text-gray-400 mb-3"></i>
+                                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Drag & drop video files here</p>
+                                    <p class="text-xs text-gray-500">or click to browse</p>
+                                    <input type="file" id="fileInput" class="hidden" accept="video/*" multiple>
+                                </div>
+                            </div>
                         </div>
                         
+                        <!-- Common Fields -->
                         <div>
                             <label class="block text-sm font-medium mb-2">YouTube Title</label>
                             <input type="text" id="youtubeTitle" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter YouTube title" required>
@@ -440,10 +447,10 @@
                         
                         <div>
                             <label class="block text-sm font-medium mb-2">Description</label>
-                            <textarea id="youtubeDescription" rows="4" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter video description"></textarea>
+                            <textarea id="youtubeDescription" rows="3" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Enter video description"></textarea>
                         </div>
                         
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium mb-2">Privacy</label>
                                 <select id="privacy" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
@@ -471,11 +478,13 @@
                             <input type="text" id="youtubeTags" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="tag1, tag2, tag3">
                         </div>
                         
-                        <button type="submit" id="uploadBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
-                            <i class="bi bi-youtube mr-2"></i>Upload to YouTube
+                        <!-- Dynamic Submit Button -->
+                        <button type="submit" id="multiModeUploadBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
+                            <i class="bi bi-cloud-arrow-up mr-2"></i>
+                            <span id="uploadButtonText">Download & Upload</span>
                         </button>
                         
-                        <!-- Upload Progress Indicator -->
+                        <!-- Multi-Mode Progress Indicators -->
                         <div id="uploadProgress" class="mt-4 hidden">
                             <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                                 <div class="flex items-center justify-between mb-2">
@@ -486,6 +495,19 @@
                                     <div id="uploadProgressBar" class="bg-red-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                                 </div>
                                 <div id="uploadStatus" class="text-xs text-red-600 dark:text-red-400 mt-2">Starting...</div>
+                            </div>
+                        </div>
+                        
+                        <div id="directUploadProgress" class="mt-4 hidden">
+                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium text-green-800 dark:text-green-200" id="directUploadPhase">Downloading...</span>
+                                    <span id="directUploadPercent" class="text-sm text-green-600 dark:text-green-400">0%</span>
+                                </div>
+                                <div class="w-full bg-green-200 dark:bg-green-800 rounded-full h-2">
+                                    <div id="directUploadProgressBar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                                <div id="directUploadStatus" class="text-xs text-green-600 dark:text-green-400 mt-2">Starting...</div>
                             </div>
                         </div>
                     </form>
