@@ -410,7 +410,6 @@ async function handleDownload(e) {
     
     let url = document.getElementById('videoUrl').value;
     const quality = document.getElementById('quality').value;
-    const format = document.getElementById('format').value;
     const downloadMode = document.getElementById('downloadMode').value;
     
     if (!url) {
@@ -438,7 +437,6 @@ async function handleDownload(e) {
             body: JSON.stringify({
                 url,
                 quality,
-                format,
                 downloadMode
             })
         });
@@ -452,7 +450,6 @@ async function handleDownload(e) {
                 url,
                 title: data.title || 'Unknown Title',
                 quality,
-                format,
                 downloadMode,
                 status: data.status,
                 progress: 0,
@@ -597,11 +594,10 @@ async function handleUpload(e) {
     e.preventDefault();
     
     const jobId = document.getElementById('downloadJobSelect').value;
-    const title = document.getElementById('videoTitle').value;
-    const description = document.getElementById('videoDescription').value;
-    const tags = document.getElementById('videoTags').value;
-    const privacy = document.getElementById('videoPrivacy').value;
-    const category = document.getElementById('videoCategory').value;
+    const title = document.getElementById('youtubeTitle').value;
+    const description = document.getElementById('youtubeDescription').value;
+    const privacy = document.getElementById('privacy').value;
+    const category = document.getElementById('category').value;
     
     if (!jobId) {
         showToast('Please select a completed download first', 'error');
@@ -625,7 +621,7 @@ async function handleUpload(e) {
                 jobId,
                 title: title.trim(),
                 description: description.trim(),
-                tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
+                tags: [],
                 privacy,
                 category
             })
