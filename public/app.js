@@ -593,7 +593,7 @@ async function handleBatchDownload(e) {
         showToast(`Batch download started for ${urls.length} videos!`, 'success');
         
         // Reset form
-        batchDownloadForm.reset();
+        document.getElementById('batchDownloadForm').reset();
         updateDownloadJobSelect();
         
     } catch (error) {
@@ -641,7 +641,7 @@ async function handleUpload(e) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                jobId,
+                downloadJobId: jobId, // Send as downloadJobId to match backend
                 title: title.trim(),
                 description: description.trim(),
                 tags: [],
@@ -683,7 +683,7 @@ async function handleUpload(e) {
             updateInlineProgress('upload', uploadJobs.get(uploadJobId));
             
             // Reset form
-            uploadForm.reset();
+            document.getElementById('uploadForm').reset();
         } else {
             if (data.requireAuth) {
                 showAuthSection();
@@ -757,7 +757,7 @@ async function handleBatchUpload(e) {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        jobId,
+                        downloadJobId: jobId, // Send as downloadJobId to match backend
                         title: downloadJob.title,
                         description: `Batch uploaded video: ${downloadJob.title}`,
                         tags: defaultTags ? defaultTags.split(',').map(tag => tag.trim()) : [],
@@ -794,7 +794,7 @@ async function handleBatchUpload(e) {
         showToast(`Batch upload started for ${selectedVideos.length} videos!`, 'success');
         
         // Reset form
-        batchUploadForm.reset();
+        document.getElementById('batchUploadForm').reset();
         updateBatchVideoList();
         
     } catch (error) {

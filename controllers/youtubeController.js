@@ -225,7 +225,8 @@ const handleCallback = async (req, res) => {
 const uploadToYoutube = async (req, res) => {
   try {
     const {
-      jobId,
+      downloadJobId, // Frontend sends downloadJobId
+      jobId, // Fallback for compatibility
       title,
       description = '',
       tags = [],
@@ -233,15 +234,17 @@ const uploadToYoutube = async (req, res) => {
       privacy = 'private'
     } = req.body;
 
-    if (!jobId) {
+    const actualJobId = downloadJobId || jobId; // Use downloadJobId first, then jobId
+
+    if (!actualJobId) {
       return res.status(400).json({
         success: false,
-        message: 'Job ID diperlukan'
+        message: 'Download Job ID diperlukan'
       });
     }
 
     // Check if download job exists and is completed
-    const downloadJob = downloadJobs.get(jobId);
+    const downloadJob = downloadJobs.get(actualJobId);
     if (!downloadJob) {
       return res.status(404).json({
         success: false,
@@ -283,7 +286,7 @@ const uploadToYoutube = async (req, res) => {
     uploadJobs.set(uploadJobId, {
       status: 'starting',
       progress: 0,
-      downloadJobId: jobId,
+      downloadJobId: actualJobId,
       title: title || downloadJob.title,
       description,
       tags,
