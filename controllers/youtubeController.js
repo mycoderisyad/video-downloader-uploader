@@ -298,7 +298,8 @@ const uploadToYoutube = async (req, res) => {
     // Send immediate response
     res.json({
       success: true,
-      uploadJobId,
+      jobId: uploadJobId, // For compatibility with frontend
+      uploadJobId, // Also include this for clarity
       message: 'YouTube upload started',
       status: 'starting'
     });

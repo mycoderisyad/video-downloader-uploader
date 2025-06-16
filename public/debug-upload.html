@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Debug - Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">🔧 Upload Debug Tool</h1>
+        
+        <!-- Test Results -->
+        <div id="testResults" class="mb-8 space-y-4"></div>
+        
+        <!-- Test Buttons -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <button onclick="testAuthStatus()" class="bg-blue-500 text-white p-4 rounded-lg hover:bg-blue-600">
+                <i class="bi bi-shield-check"></i> Test Auth Status
+            </button>
+            
+            <button onclick="testDownloadJobs()" class="bg-green-500 text-white p-4 rounded-lg hover:bg-green-600">
+                <i class="bi bi-download"></i> Test Download Jobs
+            </button>
+            
+            <button onclick="testUploadEndpoint()" class="bg-purple-500 text-white p-4 rounded-lg hover:bg-purple-600">
+                <i class="bi bi-upload"></i> Test Upload Endpoint
+            </button>
+            
+            <button onclick="testLocalStorage()" class="bg-orange-500 text-white p-4 rounded-lg hover:bg-orange-600">
+                <i class="bi bi-database"></i> Test Local Storage
+            </button>
+            
+            <button onclick="testFormElements()" class="bg-red-500 text-white p-4 rounded-lg hover:bg-red-600">
+                <i class="bi bi-ui-checks"></i> Test Form Elements
+            </button>
+            
+            <button onclick="runAllTests()" class="bg-gray-800 text-white p-4 rounded-lg hover:bg-gray-900">
+                <i class="bi bi-play-circle"></i> Run All Tests
+            </button>
+        </div>
+        
+        <!-- Manual Upload Test -->
+        <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+            <h2 class="text-xl font-bold mb-4">Manual Upload Test</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Download Job ID</label>
+                    <input type="text" id="testJobId" class="w-full p-3 border rounded-lg" placeholder="Enter job ID">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-2">Video Title</label>
+                    <input type="text" id="testTitle" class="w-full p-3 border rounded-lg" placeholder="Test Video Title">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-2">Description</label>
+                    <textarea id="testDescription" class="w-full p-3 border rounded-lg" rows="3" placeholder="Test description"></textarea>
+                </div>
+                
+                <button onclick="testManualUpload()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
+                    <i class="bi bi-upload"></i> Test Manual Upload
+                </button>
+            </div>
+        </div>
+        
+        <!-- Console Output -->
+        <div class="bg-black text-green-400 p-4 rounded-lg">
+            <h3 class="text-lg font-bold mb-2">Console Output:</h3>
+            <div id="console" class="font-mono text-sm whitespace-pre-wrap max-h-96 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400';
+            console.innerHTML += `<span class="${color}">[${timestamp}] ${message}</span>\n`;
+            console.scrollTop = console.scrollHeight;
+            
+            // Also log to browser console
+            console[type === 'error' ? 'error' : 'log'](message);
+        }
+        
+        function addTestResult(title, status, details = '') {
+            const results = document.getElementById('testResults');
+            const statusColor = status === 'PASS' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const icon = status === 'PASS' ? 'bi-check-circle' : 'bi-x-circle';
+            
+            results.innerHTML += `
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold">${title}</h3>
+                        <span class="px-3 py-1 rounded-full text-sm ${statusColor}">
+                            <i class="bi ${icon}"></i> ${status}
+                        </span>
+                    </div>
+                    ${details ? `<p class="text-gray-600 mt-2">${details}</p>` : ''}
+                </div>
+            `;
+        }
+        
+        async function testAuthStatus() {
+            log('Testing auth status...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                log(`Auth status response: ${JSON.stringify(data, null, 2)}`, 'info');
+                
+                if (data.success) {
+                    const isAuth = data.isAuthenticated || data.authenticated || false;
+                    addTestResult('Auth Status', isAuth ? 'PASS' : 'FAIL', 
+                        isAuth ? 'YouTube is connected' : 'YouTube not connected');
+                } else {
+                    addTestResult('Auth Status', 'FAIL', data.message || 'Auth check failed');
+                }
+            } catch (error) {
+                log(`Auth status error: ${error.message}`, 'error');
+                addTestResult('Auth Status', 'FAIL', error.message);
+            }
+        }
+        
+        async function testDownloadJobs() {
+            log('Testing download jobs...', 'info');
+            
+            try {
+                // Check localStorage for download jobs
+                const savedJobs = localStorage.getItem('downloadJobs');
+                if (!savedJobs) {
+                    addTestResult('Download Jobs', 'FAIL', 'No download jobs found in localStorage');
+                    return;
+                }
+                
+                const jobs = new Map(JSON.parse(savedJobs));
+                const completedJobs = Array.from(jobs.values()).filter(job => job.status === 'completed');
+                
+                log(`Found ${jobs.size} total jobs, ${completedJobs.length} completed`, 'info');
+                
+                if (completedJobs.length > 0) {
+                    addTestResult('Download Jobs', 'PASS', 
+                        `Found ${completedJobs.length} completed download jobs`);
+                    
+                    // Log first completed job for testing
+                    const firstJob = completedJobs[0];
+                    log(`First completed job: ${JSON.stringify(firstJob, null, 2)}`, 'info');
+                } else {
+                    addTestResult('Download Jobs', 'FAIL', 'No completed download jobs available');
+                }
+            } catch (error) {
+                log(`Download jobs error: ${error.message}`, 'error');
+                addTestResult('Download Jobs', 'FAIL', error.message);
+            }
+        }
+        
+        async function testUploadEndpoint() {
+            log('Testing upload endpoint...', 'info');
+            
+            try {
+                // Test with dummy data to see endpoint response
+                const response = await fetch(`${API_BASE}/api/upload-youtube`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jobId: 'test-job-id',
+                        title: 'Test Title',
+                        description: 'Test Description',
+                        privacy: 'private',
+                        category: '22'
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Upload endpoint response: ${JSON.stringify(data, null, 2)}`, 'info');
+                
+                if (response.ok) {
+                    addTestResult('Upload Endpoint', 'PASS', 'Endpoint is accessible');
+                } else {
+                    addTestResult('Upload Endpoint', 'FAIL', 
+                        `HTTP ${response.status}: ${data.message || 'Unknown error'}`);
+                }
+            } catch (error) {
+                log(`Upload endpoint error: ${error.message}`, 'error');
+                addTestResult('Upload Endpoint', 'FAIL', error.message);
+            }
+        }
+        
+        function testLocalStorage() {
+            log('Testing local storage...', 'info');
+            
+            try {
+                const items = ['downloadJobs', 'uploadJobs', 'youtube_credentials'];
+                let results = [];
+                
+                items.forEach(item => {
+                    const data = localStorage.getItem(item);
+                    if (data) {
+                        try {
+                            const parsed = JSON.parse(data);
+                            results.push(`${item}: ${typeof parsed === 'object' ? Object.keys(parsed).length + ' items' : 'valid'}`);
+                        } catch {
+                            results.push(`${item}: invalid JSON`);
+                        }
+                    } else {
+                        results.push(`${item}: not found`);
+                    }
+                });
+                
+                log(`LocalStorage contents: ${results.join(', ')}`, 'info');
+                addTestResult('Local Storage', 'PASS', results.join('<br>'));
+            } catch (error) {
+                log(`Local storage error: ${error.message}`, 'error');
+                addTestResult('Local Storage', 'FAIL', error.message);
+            }
+        }
+        
+        function testFormElements() {
+            log('Testing form elements...', 'info');
+            
+            try {
+                // Test if we're on main page by checking for elements
+                const elements = [
+                    'downloadJobSelect',
+                    'youtubeTitle', 
+                    'youtubeDescription',
+                    'privacy',
+                    'category'
+                ];
+                
+                let found = 0;
+                let missing = [];
+                
+                elements.forEach(id => {
+                    if (document.getElementById(id)) {
+                        found++;
+                    } else {
+                        missing.push(id);
+                    }
+                });
+                
+                if (found === elements.length) {
+                    addTestResult('Form Elements', 'PASS', 'All required form elements found');
+                } else {
+                    addTestResult('Form Elements', 'FAIL', 
+                        `Missing elements: ${missing.join(', ')}`);
+                }
+                
+                log(`Form elements: ${found}/${elements.length} found`, 'info');
+            } catch (error) {
+                log(`Form elements error: ${error.message}`, 'error');
+                addTestResult('Form Elements', 'FAIL', error.message);
+            }
+        }
+        
+        async function testManualUpload() {
+            log('Testing manual upload...', 'info');
+            
+            const jobId = document.getElementById('testJobId').value;
+            const title = document.getElementById('testTitle').value;
+            const description = document.getElementById('testDescription').value;
+            
+            if (!jobId || !title) {
+                log('Please fill in Job ID and Title', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/upload-youtube`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jobId,
+                        title,
+                        description,
+                        privacy: 'private',
+                        category: '22'
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Manual upload response: ${JSON.stringify(data, null, 2)}`, 'info');
+                
+                if (data.success) {
+                    addTestResult('Manual Upload', 'PASS', 
+                        `Upload started with job ID: ${data.uploadJobId || data.jobId}`);
+                } else {
+                    addTestResult('Manual Upload', 'FAIL', data.message || 'Upload failed');
+                }
+            } catch (error) {
+                log(`Manual upload error: ${error.message}`, 'error');
+                addTestResult('Manual Upload', 'FAIL', error.message);
+            }
+        }
+        
+        async function runAllTests() {
+            log('Running all tests...', 'info');
+            document.getElementById('testResults').innerHTML = '';
+            
+            await testAuthStatus();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testDownloadJobs();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testUploadEndpoint();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            testLocalStorage();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            testFormElements();
+            
+            log('All tests completed!', 'success');
+        }
+        
+        // Auto-run basic tests on load
+        window.addEventListener('load', () => {
+            log('Debug page loaded. Ready for testing.', 'info');
+        });
+    </script>
+</body>
+</html> 

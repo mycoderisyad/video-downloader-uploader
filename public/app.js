@@ -372,6 +372,16 @@ function setupTabNavigation() {
                 targetContent.classList.add('active');
                 console.log('✅ Tab switched to:', targetTab);
                 
+                // Update UI based on tab
+                if (targetTab === 'upload') {
+                    updateDownloadJobSelect();
+                    updateBatchVideoList();
+                    console.log('✅ Upload tab UI updated');
+                } else if (targetTab === 'history') {
+                    updateJobsList();
+                    console.log('✅ History tab UI updated');
+                }
+                
                 // Save active tab
                 saveActiveTab(targetTab);
             } else {
@@ -605,11 +615,20 @@ async function handleUpload(e) {
     
     if (!jobId) {
         showToast('Please select a completed download first', 'error');
+        updateDownloadJobSelect(); // Refresh the list
         return;
     }
     
     if (!title.trim()) {
         showToast('Please enter a video title', 'error');
+        return;
+    }
+    
+    // Check auth status first
+    const isAuthenticated = await checkAuthStatus();
+    if (!isAuthenticated) {
+        showToast('YouTube authentication required. Please authenticate first.', 'error');
+        showAuthSection();
         return;
     }
     
@@ -632,23 +651,28 @@ async function handleUpload(e) {
         });
         
         const data = await response.json();
+        console.log('Upload response:', data);
         
         if (data.success) {
+            // Use uploadJobId from server response, fallback to jobId
+            const uploadJobId = data.uploadJobId || data.jobId;
+            console.log('Upload job ID:', uploadJobId);
+            
             // Store upload job info
-            uploadJobs.set(data.jobId, {
-                id: data.jobId,
+            uploadJobs.set(uploadJobId, {
+                id: uploadJobId,
                 downloadJobId: jobId,
                 title: title.trim(),
                 description: description.trim(),
                 privacy,
                 category,
-                status: data.status,
+                status: data.status || 'starting',
                 progress: 0,
                 type: 'upload',
                 timestamp: new Date().toISOString()
             });
             
-            currentUploadJob = data.jobId;
+            currentUploadJob = uploadJobId;
             
             saveJobsToStorage();
             showProgress('Upload to YouTube', 'starting', 0);
@@ -656,7 +680,7 @@ async function handleUpload(e) {
             showInlineProgress('upload');
             
             // Update inline progress immediately
-            updateInlineProgress('upload', uploadJobs.get(data.jobId));
+            updateInlineProgress('upload', uploadJobs.get(uploadJobId));
             
             // Reset form
             uploadForm.reset();
@@ -684,6 +708,14 @@ async function handleUpload(e) {
 
 async function handleBatchUpload(e) {
     e.preventDefault();
+    
+    // Check auth status first
+    const isAuthenticated = await checkAuthStatus();
+    if (!isAuthenticated) {
+        showToast('YouTube authentication required. Please authenticate first.', 'error');
+        showAuthSection();
+        return;
+    }
     
     const selectedVideos = Array.from(document.querySelectorAll('#batchVideoList input[type="checkbox"]:checked'))
         .map(checkbox => checkbox.value);
@@ -736,10 +768,13 @@ async function handleBatchUpload(e) {
                 });
                 
                 const data = await response.json();
+                console.log('Batch upload response for job', jobId, ':', data);
+                
                 if (data.success) {
-                    batchJob.jobs.push(data.uploadJobId);
-                    uploadJobs.set(data.uploadJobId, {
-                        id: data.uploadJobId,
+                    const uploadJobId = data.uploadJobId || data.jobId;
+                    batchJob.jobs.push(uploadJobId);
+                    uploadJobs.set(uploadJobId, {
+                        id: uploadJobId,
                         downloadJobId: jobId,
                         title: downloadJob.title,
                         description: `Batch uploaded video: ${downloadJob.title}`,
