@@ -121,6 +121,10 @@ async function initializeApp() {
         loadJobsFromStorage();
         console.log('✅ Jobs loaded from storage');
         
+        // Clean up invalid jobs
+        cleanupInvalidJobs();
+        console.log('✅ Invalid jobs cleaned up');
+        
         // Setup event listeners
         setupEventListeners();
         console.log('✅ Event listeners setup');
@@ -1077,10 +1081,11 @@ function showAuthErrorWithRefresh(message) {
 // Enhanced progress updates with better error handling
 async function updateProgress() {
     try {
-        // Get all active jobs
+        // Get all active jobs and filter out invalid ones
         const allJobs = [...downloadJobs.values(), ...uploadJobs.values()];
         const activeJobs = allJobs.filter(job => 
-            job.status === 'downloading' || job.status === 'uploading' || job.status === 'starting'
+            job && job.id && typeof job.id === 'string' && 
+            (job.status === 'downloading' || job.status === 'uploading' || job.status === 'starting')
         );
         
         // Update each active job
@@ -1369,21 +1374,32 @@ function updateJobsList() {
     
     const allJobs = [...downloadJobs.values(), ...uploadJobs.values()];
     
-    if (allJobs.length === 0) {
+    // Filter out invalid jobs
+    const validJobs = allJobs.filter(job => job && job.id && typeof job.id === 'string');
+    
+    if (validJobs.length === 0) {
         container.innerHTML = '<p class="text-muted">Belum ada jobs yang dijalankan.</p>';
         return;
     }
     
     // Sort jobs by timestamp (newest first)
-    allJobs.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
+    validJobs.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
     
-    allJobs.forEach(job => {
+    validJobs.forEach(job => {
         const jobElement = createJobElement(job);
-        container.appendChild(jobElement);
+        if (jobElement) { // Only append if element was created successfully
+            container.appendChild(jobElement);
+        }
     });
 }
 
 function createJobElement(job) {
+    // Validate job object
+    if (!job || !job.id || typeof job.id !== 'string') {
+        console.warn('Invalid job passed to createJobElement:', job);
+        return null;
+    }
+    
     const div = document.createElement('div');
     div.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-4 border border-gray-200 dark:border-gray-700';
     div.setAttribute('data-job-id', job.id); // Add data attribute for easier identification
@@ -1698,12 +1714,33 @@ function loadJobsFromStorage() {
         const savedUploadJobs = localStorage.getItem('uploadJobs');
         
         if (savedDownloadJobs) {
-            downloadJobs = new Map(JSON.parse(savedDownloadJobs));
+            const jobs = new Map(JSON.parse(savedDownloadJobs));
+            downloadJobs = new Map();
+            // Only load valid jobs
+            for (const [id, job] of jobs) {
+                if (job && job.id && typeof job.id === 'string') {
+                    downloadJobs.set(id, job);
+                } else {
+                    console.warn('Skipping invalid download job:', job);
+                }
+            }
         }
         
         if (savedUploadJobs) {
-            uploadJobs = new Map(JSON.parse(savedUploadJobs));
+            const jobs = new Map(JSON.parse(savedUploadJobs));
+            uploadJobs = new Map();
+            // Only load valid jobs
+            for (const [id, job] of jobs) {
+                if (job && job.id && typeof job.id === 'string') {
+                    uploadJobs.set(id, job);
+                } else {
+                    console.warn('Skipping invalid upload job:', job);
+                }
+            }
         }
+        
+        console.log('✅ Jobs loaded from storage - Download:', downloadJobs.size, 'Upload:', uploadJobs.size);
+        
     } catch (error) {
         console.error('Error loading jobs from storage:', error);
         downloadJobs = new Map();
@@ -2647,4 +2684,39 @@ window.updateCredentialsStatus = updateCredentialsStatus;
 
 function hasLocalCredentials() {
     return localStorage.getItem('youtube_credentials') !== null;
+}
+
+// Function to clean up invalid jobs from Maps and localStorage
+function cleanupInvalidJobs() {
+    let cleaned = false;
+    
+    // Clean download jobs
+    for (const [id, job] of downloadJobs.entries()) {
+        if (!job || !job.id || typeof job.id !== 'string' || job.id === 'undefined') {
+            downloadJobs.delete(id);
+            cleaned = true;
+            console.log('🧹 Removed invalid download job:', id, job);
+        }
+    }
+    
+    // Clean upload jobs
+    for (const [id, job] of uploadJobs.entries()) {
+        if (!job || !job.id || typeof job.id !== 'string' || job.id === 'undefined') {
+            uploadJobs.delete(id);
+            cleaned = true;
+            console.log('🧹 Removed invalid upload job:', id, job);
+        }
+    }
+    
+    // Save cleaned data back to storage
+    if (cleaned) {
+        saveJobsToStorage();
+        console.log('✅ Invalid jobs cleaned up and storage updated');
+        
+        // Update UI
+        updateJobsList();
+        updateDownloadJobSelect();
+    }
+    
+    return cleaned;
 }
