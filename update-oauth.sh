@@ -16,7 +16,7 @@ echo "   APIs & Services > Credentials > Create Credentials > OAuth 2.0 Client I
 echo ""
 echo "4. 🌍 Set Authorized redirect URIs:"
 echo "   - https://prafunschool.web.id/api/auth/youtube/callback"
-echo "   - http://127.0.0.1:3000/api/auth/youtube/callback"
+echo "   - http://127.0.0.1:3031/api/auth/youtube/callback"
 echo ""
 echo "5. 👥 Configure OAuth Consent Screen:"
 echo "   - User Type: External"
@@ -40,7 +40,7 @@ read -p "YouTube Client Secret: " CLIENT_SECRET
 # Update .env file
 cat > .env << EOF
 # Server Configuration
-PORT=3000
+PORT=3031
 NODE_ENV=production
 LOG_LEVEL=info
 
@@ -52,7 +52,7 @@ YOUTUBE_REDIRECT_URI=https://prafunschool.web.id/api/auth/youtube/callback
 # Security and Performance
 RATE_LIMIT_WINDOW=15
 RATE_LIMIT_MAX=100
-CORS_ORIGINS=https://prafunschool.web.id,http://localhost:3000
+CORS_ORIGINS=https://prafunschool.web.id,http://localhost:3031
 EOF
 
 echo ""

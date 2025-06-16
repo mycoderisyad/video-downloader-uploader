@@ -79,7 +79,7 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000
+      PORT: 3031
     }
   }]
 };
@@ -130,7 +130,7 @@ server {
     # ssl_certificate_key /path/to/your/private.key;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3031;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';

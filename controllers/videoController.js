@@ -29,7 +29,7 @@ const platformPatterns = {
 
 const downloadVideo = async (req, res) => {
   try {
-    const { url, title, quality = 'best', downloadMode = 'server', downloaderChoice = 'auto', batchId } = req.body;
+    let { url, title, quality = 'best', downloadMode = 'server', downloaderChoice = 'auto', batchId } = req.body;
     
     if (!url) {
       return res.status(400).json({
@@ -37,6 +37,16 @@ const downloadVideo = async (req, res) => {
         message: 'Video URL is required'
       });
     }
+
+    // Clean and normalize URL - remove accidental spaces and normalize
+    url = url.trim();
+    
+    // Additional URL cleaning
+    url = url.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
+    url = url.replace(/\s+/g, ''); // Remove any internal spaces
+    
+    // Log cleaned URL for debugging
+    logger.info(`Original URL cleaned: ${url}`);
 
     // Validate URL and detect platform
     const platform = detectPlatform(url);
@@ -786,7 +796,7 @@ const downloadDirectVideo = async (jobId, url, outputPath, quality) => {
 
 const previewVideo = async (req, res) => {
   try {
-    const { url } = req.body;
+    let { url } = req.body;
     
     if (!url) {
       return res.status(400).json({
@@ -794,6 +804,16 @@ const previewVideo = async (req, res) => {
         message: 'URL is required'
       });
     }
+
+    // Clean and normalize URL - remove accidental spaces and normalize
+    url = url.trim();
+    
+    // Additional URL cleaning
+    url = url.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
+    url = url.replace(/\s+/g, ''); // Remove any internal spaces
+    
+    // Log cleaned URL for debugging
+    logger.info(`Preview URL cleaned: ${url}`);
 
     const platform = detectPlatform(url);
     

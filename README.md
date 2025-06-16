@@ -77,7 +77,7 @@ npm start
 
 **Access Application**
 ```
-http://localhost:3000
+http://localhost:3031
 ```
 
 ## Detailed Setup
@@ -265,7 +265,7 @@ testDelete();
 1. **Environment Variables**
 ```bash
 NODE_ENV=production
-PORT=3000
+PORT=3031
 ```
 
 2. **Process Manager**
@@ -288,7 +288,7 @@ server {
     server_name yourdomain.com;
     
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3031;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

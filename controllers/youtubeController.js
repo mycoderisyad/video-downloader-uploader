@@ -229,7 +229,8 @@ const uploadToYoutube = async (req, res) => {
       privacy,
       startTime: new Date(),
       error: null,
-      videoId: null
+      videoId: null,
+      userSessionId: userSessionId
     });
 
     // Send immediate response
@@ -247,7 +248,7 @@ const uploadToYoutube = async (req, res) => {
       tags,
       category,
       privacy
-    });
+    }, userSessionId);
 
   } catch (error) {
     logger.error('Error in uploadToYoutube:', error);
@@ -259,32 +260,89 @@ const uploadToYoutube = async (req, res) => {
   }
 };
 
-const startYouTubeUpload = async (uploadJobId, videoPath, metadata) => {
+const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionId) => {
   try {
     updateUploadStatus(uploadJobId, 'uploading', 0);
 
-    // Ensure we have valid tokens before proceeding
-    const hasValidTokens = await ensureValidTokens();
-    if (!hasValidTokens) {
+    // First try to get tokens from user session
+    let tokensFound = false;
+    let tokensToUse = null;
+
+    if (userSessionId && userTokens.has(userSessionId)) {
+      tokensToUse = userTokens.get(userSessionId);
+      logger.info(`Using user session tokens for upload ${uploadJobId}`);
+      tokensFound = true;
+    } else {
+      // Fallback to checking global tokens file
+      const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
+      if (await fs.pathExists(tokenPath)) {
+        tokensToUse = await fs.readJson(tokenPath);
+        logger.info(`Using global tokens file for upload ${uploadJobId}`);
+        tokensFound = true;
+      }
+    }
+
+    if (!tokensFound || !tokensToUse) {
       throw new Error('YouTube authentication required. Please authenticate first.');
     }
 
-    // Double-check that we have refresh token
-    const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
-    if (await fs.pathExists(tokenPath)) {
-      const tokens = await fs.readJson(tokenPath);
-      if (!tokens.refresh_token) {
-        throw new Error('No refresh token available. Please re-authenticate with YouTube.');
-      }
-      
-      // Ensure oauth2Client has the latest tokens
-      oauth2Client.setCredentials(tokens);
-      logger.info('OAuth2 client credentials set successfully');
-    } else {
-      throw new Error('No authentication tokens found. Please authenticate with YouTube first.');
+    if (!tokensToUse.refresh_token) {
+      throw new Error('No refresh token available. Please re-authenticate with YouTube.');
     }
 
-    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+    // Load saved credentials for OAuth client
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    if (!await fs.pathExists(credentialsPath)) {
+      throw new Error('YouTube credentials not configured. Please save credentials in Settings first.');
+    }
+
+    const savedCredentials = await fs.readJson(credentialsPath);
+    
+    // Create OAuth2 client with saved credentials
+    const uploadOAuth2Client = new google.auth.OAuth2(
+      savedCredentials.clientId,
+      savedCredentials.clientSecret,
+      savedCredentials.redirectUri || REDIRECT_URI
+    );
+
+    // Set the tokens
+    uploadOAuth2Client.setCredentials(tokensToUse);
+    
+    // Check if token needs refresh
+    const now = Date.now();
+    const expiryBuffer = 5 * 60 * 1000; // 5 minutes
+    
+    if (tokensToUse.expiry_date && (tokensToUse.expiry_date - expiryBuffer) <= now) {
+      logger.info('Access token expired, refreshing...');
+      
+      try {
+        const { credentials } = await uploadOAuth2Client.refreshAccessToken();
+        
+        // Update tokens
+        const updatedTokens = {
+          ...tokensToUse,
+          ...credentials,
+          refresh_token: tokensToUse.refresh_token, // Preserve refresh token
+          updated_at: new Date()
+        };
+        
+        uploadOAuth2Client.setCredentials(updatedTokens);
+        
+        // Update user session tokens if that's what we're using
+        if (userSessionId && userTokens.has(userSessionId)) {
+          userTokens.set(userSessionId, updatedTokens);
+        }
+        
+        logger.info('YouTube tokens refreshed successfully for upload');
+      } catch (refreshError) {
+        logger.error('Error refreshing tokens for upload:', refreshError);
+        throw new Error('Token refresh failed. Please re-authenticate with YouTube.');
+      }
+    }
+    
+    logger.info('OAuth2 client credentials set successfully for upload');
+
+    const youtube = google.youtube({ version: 'v3', auth: uploadOAuth2Client });
 
     const fileSize = (await fs.stat(videoPath)).size;
     let uploadedBytes = 0;
@@ -333,19 +391,81 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata) => {
   } catch (error) {
     logger.error(`YouTube upload error for job ${uploadJobId}:`, error);
     
+    // Log full error details for debugging
+    logger.error('Full YouTube API error details:', {
+      code: error.code,
+      message: error.message,
+      status: error.status,
+      statusText: error.statusText,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : 'No response object',
+      config: error.config ? {
+        method: error.config.method,
+        url: error.config.url
+      } : 'No config object'
+    });
+    
     let errorMessage = error.message;
-    if (error.code === 401 || error.message.includes('No refresh token') || error.message.includes('invalid_grant')) {
+    
+    // Handle specific YouTube API errors
+    if (error.response && error.response.data && error.response.data.error) {
+      const apiError = error.response.data.error;
+      logger.error('YouTube API specific error:', apiError);
+      
+      if (apiError.code === 403) {
+        if (apiError.message && apiError.message.includes('quota')) {
+          errorMessage = 'YouTube API quota habis untuk hari ini. Quota akan reset otomatis dalam 24 jam (UTC). Untuk upload lebih banyak, silakan request quota tambahan dari Google.';
+        } else if (apiError.message && (apiError.message.includes('exceeded') || apiError.message.includes('limit'))) {
+          errorMessage = 'Batas upload video YouTube untuk hari ini sudah terlampaui. Default limit: 6 video per hari (10,000 quota units). Quota akan reset otomatis besok. Untuk meningkatkan limit, request quota extension dari Google.';
+        } else if (apiError.errors && apiError.errors.length > 0) {
+          const firstError = apiError.errors[0];
+          if (firstError.reason === 'quotaExceeded' || firstError.reason === 'rateLimitExceeded') {
+            errorMessage = 'YouTube API quota atau rate limit terlampaui. Quota akan reset dalam 24 jam. Untuk upload lebih banyak, request quota extension dari Google Cloud Console.';
+          } else if (firstError.reason === 'uploadLimitExceeded') {
+            errorMessage = 'Batas upload video harian YouTube terlampaui. YouTube membatasi jumlah upload per channel per hari. Coba lagi besok atau hubungi YouTube support untuk peningkatan limit.';
+          } else {
+            errorMessage = `YouTube API Error: ${firstError.message || apiError.message}`;
+          }
+        } else {
+          errorMessage = 'YouTube API access forbidden. Periksa permissions dan quota.';
+        }
+      } else if (apiError.code === 401) {
+        errorMessage = 'Authentication expired or invalid. Please re-authenticate with YouTube.';
+      } else {
+        errorMessage = `YouTube API Error (${apiError.code}): ${apiError.message}`;
+      }
+    } else if (error.code === 401 || error.message.includes('No refresh token') || error.message.includes('invalid_grant')) {
       errorMessage = 'Authentication expired or invalid. Please re-authenticate with YouTube.';
-      // Clear invalid tokens
+      
+      // Clear invalid tokens from both user session and global file
+      const uploadJob = uploadJobs.get(uploadJobId);
+      if (uploadJob && uploadJob.userSessionId && userTokens.has(uploadJob.userSessionId)) {
+        userTokens.delete(uploadJob.userSessionId);
+        logger.info(`Cleared invalid user session tokens for session: ${uploadJob.userSessionId.substring(0, 8)}...`);
+      }
+      
       const tokenPath = path.join(__dirname, '../config/youtube_tokens.json');
       if (await fs.pathExists(tokenPath)) {
         await fs.remove(tokenPath);
-        logger.info('Cleared invalid YouTube tokens');
+        logger.info('Cleared invalid YouTube tokens file');
       }
     } else if (error.code === 403) {
-      errorMessage = 'YouTube API quota exceeded or insufficient permissions.';
+      // Check if this is a quota error specifically
+      if (error.message.includes('quota') || error.message.includes('exceeded') || 
+          error.message.includes('limit') || error.message.includes('dailyLimitExceeded')) {
+        errorMessage = 'YouTube API quota habis untuk hari ini. Quota akan reset otomatis dalam 24 jam (UTC). Untuk upload lebih banyak, silakan request quota tambahan dari Google.';
+      } else {
+        errorMessage = 'YouTube API access forbidden. Periksa permissions dan quota.';
+      }
     } else if (error.message.includes('quota')) {
-      errorMessage = 'YouTube API quota exceeded. Please try again later.';
+      errorMessage = 'YouTube API quota habis untuk hari ini. Quota akan reset otomatis dalam 24 jam (UTC). Coba lagi besok atau request quota tambahan dari Google.';
+    } else if (error.message.includes('dailyLimitExceeded') || error.message.includes('userRateLimitExceeded')) {
+      errorMessage = 'Limit upload harian YouTube terlampaui. Quota akan reset dalam 24 jam. Untuk upload lebih banyak video per hari, silakan request quota extension dari Google Cloud Console.';
+    } else if (error.message.includes('exceeded the number of videos')) {
+      errorMessage = 'Batas upload video YouTube untuk hari ini sudah terlampaui. Default limit: 6 video per hari (10,000 quota units). Quota akan reset otomatis besok. Untuk meningkatkan limit, request quota extension dari Google.';
     } else if (error.message.includes('authentication')) {
       errorMessage = 'YouTube authentication failed. Please re-authenticate.';
     } else if (error.message.includes('refresh token')) {
@@ -635,6 +755,81 @@ const disconnectAuth = async (req, res) => {
   }
 };
 
+const refreshAuth = async (req, res) => {
+  try {
+    // Get user session ID
+    const userSessionId = getUserSessionId(req);
+    const userTokenData = userTokens.get(userSessionId);
+    
+    if (!userTokenData || !userTokenData.refresh_token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No valid refresh token found. Please re-authenticate.',
+        requireAuth: true
+      });
+    }
+
+    // Load saved credentials
+    const credentialsPath = path.join(__dirname, '../config/youtube_credentials.json');
+    if (!await fs.pathExists(credentialsPath)) {
+      return res.status(500).json({
+        success: false,
+        message: 'YouTube credentials not configured',
+        requireCredentials: true
+      });
+    }
+
+    const savedCredentials = await fs.readJson(credentialsPath);
+    const refreshOAuth2Client = new google.auth.OAuth2(
+      savedCredentials.clientId,
+      savedCredentials.clientSecret,
+      savedCredentials.redirectUri || REDIRECT_URI
+    );
+
+    refreshOAuth2Client.setCredentials(userTokenData);
+
+    try {
+      const { credentials } = await refreshOAuth2Client.refreshAccessToken();
+      
+      // Update tokens
+      const updatedTokens = {
+        ...userTokenData,
+        ...credentials,
+        refresh_token: userTokenData.refresh_token, // Preserve refresh token
+        updated_at: new Date()
+      };
+      
+      // Store updated tokens
+      userTokens.set(userSessionId, updatedTokens);
+      
+      logger.info(`YouTube tokens refreshed successfully for session: ${userSessionId.substring(0, 8)}...`);
+      
+      res.json({
+        success: true,
+        message: 'Authentication refreshed successfully'
+      });
+    } catch (refreshError) {
+      logger.error('Error refreshing tokens:', refreshError);
+      
+      // Remove invalid tokens
+      userTokens.delete(userSessionId);
+      
+      res.status(401).json({
+        success: false,
+        message: 'Token refresh failed. Please re-authenticate.',
+        requireAuth: true
+      });
+    }
+  } catch (error) {
+    logger.error('Error in refreshAuth:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error refreshing authentication',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   initiateAuth,
   handleCallback,
@@ -643,6 +838,7 @@ module.exports = {
   saveCredentials,
   getAuthStatus,
   disconnectAuth,
+  refreshAuth,
   ensureValidTokens,
   uploadJobs
 }; 

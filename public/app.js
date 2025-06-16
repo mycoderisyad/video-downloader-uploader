@@ -329,7 +329,7 @@ function setupDragAndDrop() {
 async function handleDownload(e) {
     e.preventDefault();
     
-    const url = document.getElementById('videoUrl').value;
+    let url = document.getElementById('videoUrl').value;
     const title = document.getElementById('videoTitle').value;
     const quality = document.getElementById('quality').value;
     const downloadMode = document.getElementById('downloadMode').value;
@@ -338,6 +338,18 @@ async function handleDownload(e) {
     if (!url) {
         showToast('Video URL is required', 'error');
         return;
+    }
+    
+    // Clean and normalize URL - remove accidental spaces and normalize
+    const originalUrl = url;
+    url = url.trim();
+    url = url.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
+    url = url.replace(/\s+/g, ''); // Remove any internal spaces
+    
+    // Update the input field if URL was cleaned
+    if (originalUrl !== url) {
+        document.getElementById('videoUrl').value = url;
+        showToast('URL dibersihkan otomatis (spasi dihapus)', 'info');
     }
     
     try {
@@ -401,7 +413,21 @@ async function handleDownload(e) {
 async function handleBatchDownload(e) {
     e.preventDefault();
     
-    const urls = document.getElementById('batchUrls').value.split('\n').filter(url => url.trim());
+    const urlsRaw = document.getElementById('batchUrls').value.split('\n');
+    // Clean each URL and filter out empty ones
+    const urls = urlsRaw.map(url => {
+        const cleaned = url.trim().replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, '');
+        return cleaned;
+    }).filter(url => url);
+    
+    // Update the textarea with cleaned URLs if any changes were made
+    const cleanedUrlsText = urls.join('\n');
+    const originalText = document.getElementById('batchUrls').value;
+    if (originalText !== cleanedUrlsText) {
+        document.getElementById('batchUrls').value = cleanedUrlsText;
+        showToast('URL batch dibersihkan otomatis (spasi dihapus)', 'info');
+    }
+    
     const quality = document.getElementById('batchQuality').value;
     const downloadMode = document.getElementById('batchDownloadMode').value;
     
@@ -548,8 +574,16 @@ async function handleUpload(e) {
         } else {
             if (data.requireAuth) {
                 showAuthSection();
+                showToast('Authentication required. Please authenticate with YouTube first.', 'warning');
+            } else if (data.message && data.message.includes('authentication')) {
+                // Show authentication error with refresh option
+                showAuthErrorWithRefresh(data.message);
+            } else if (data.message && (data.message.includes('quota') || data.message.includes('limit') || data.message.includes('exceeded'))) {
+                // Show quota error with helpful information
+                showQuotaError(data.message);
+            } else {
+                showToast(data.message || 'Error starting upload', 'error');
             }
-            showToast(data.message || 'Error starting upload', 'error');
         }
     } catch (error) {
         console.error('Upload error:', error);
@@ -648,11 +682,23 @@ async function handleBatchUpload(e) {
 }
 
 async function handlePreview() {
-    const url = document.getElementById('videoUrl').value;
+    let url = document.getElementById('videoUrl').value;
     
     if (!url) {
         showToast('Please enter a video URL first', 'error');
         return;
+    }
+    
+    // Clean and normalize URL - remove accidental spaces and normalize
+    const originalUrl = url;
+    url = url.trim();
+    url = url.replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width characters
+    url = url.replace(/\s+/g, ''); // Remove any internal spaces
+    
+    // Update the input field if URL was cleaned
+    if (originalUrl !== url) {
+        document.getElementById('videoUrl').value = url;
+        showToast('URL dibersihkan otomatis (spasi dihapus)', 'info');
     }
     
     previewModal.classList.remove('hidden');
@@ -812,6 +858,85 @@ async function disconnectYouTube() {
     }
 }
 
+async function refreshYouTubeAuth() {
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Authentication refreshed successfully!', 'success');
+            // Check auth status to update UI
+            await checkAuthStatus();
+            return true;
+        } else {
+            if (data.requireAuth) {
+                showToast('Authentication expired. Please re-authenticate.', 'warning');
+                updateConnectionStatus(false);
+                showAuthSection();
+            } else {
+                showToast(data.message || 'Error refreshing authentication', 'error');
+            }
+            return false;
+        }
+    } catch (error) {
+        console.error('Refresh auth error:', error);
+        showToast('Error connecting to server', 'error');
+        return false;
+    }
+}
+
+function showAuthErrorWithRefresh(message) {
+    // Create custom toast with refresh button
+    const toastId = `toast-${Date.now()}`;
+    const toastContainer = document.getElementById('toastContainer');
+    
+    const toastElement = document.createElement('div');
+    toastElement.id = toastId;
+    toastElement.className = `
+        fixed top-4 right-4 bg-yellow-50 dark:bg-yellow-900/90 border border-yellow-200 dark:border-yellow-700 
+        text-yellow-800 dark:text-yellow-200 px-4 py-3 rounded-lg shadow-lg max-w-md z-50
+        transform transition-all duration-300 translate-x-full opacity-0
+    `;
+    
+    toastElement.innerHTML = `
+        <div class="flex items-start">
+            <i class="bi bi-exclamation-triangle text-yellow-500 mr-3 mt-0.5"></i>
+            <div class="flex-1">
+                <p class="font-medium">Authentication Error</p>
+                <p class="text-sm mt-1">${message}</p>
+                <div class="mt-3 flex space-x-2">
+                    <button onclick="refreshYouTubeAuth().then(success => { if (success) removeToast('${toastId}'); })" 
+                            class="bg-yellow-600 hover:bg-yellow-700 text-white text-xs px-3 py-1 rounded">
+                        <i class="bi bi-arrow-clockwise mr-1"></i>Refresh Auth
+                    </button>
+                    <button onclick="initiateYouTubeAuth(); removeToast('${toastId}')" 
+                            class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
+                        <i class="bi bi-key mr-1"></i>Re-authenticate
+                    </button>
+                </div>
+            </div>
+            <button onclick="removeToast('${toastId}')" class="ml-2 text-yellow-400 hover:text-yellow-600">
+                <i class="bi bi-x text-lg"></i>
+            </button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toastElement);
+    
+    // Animate in
+    setTimeout(() => {
+        toastElement.classList.remove('translate-x-full', 'opacity-0');
+    }, 100);
+    
+    // Auto remove after 15 seconds (longer for this important message)
+    setTimeout(() => {
+        removeToast(toastId);
+    }, 15000);
+}
+
 async function updateProgress() {
     // Update download progress
     if (currentDownloadJob) {
@@ -836,7 +961,7 @@ async function updateProgress() {
                     showProgress('Download Video', job.status, job.progress);
                     currentDownloadJob = null;
                     updateDownloadJobSelect();
-                    setTimeout(() => hideProgress(), 3000);
+                    setTimeout(() => hideProgress(), 3030);
                 } else if (job.status === 'error') {
                     showProgress('Download Video', job.status, job.progress, job.error);
                     currentDownloadJob = null;
@@ -875,6 +1000,12 @@ async function updateProgress() {
                     currentUploadJob = null;
                 } else if (job.status === 'error') {
                     showProgress('Upload ke YouTube', job.status, job.progress, job.error);
+                    
+                    // Check if error is authentication related
+                    if (job.error && job.error.includes('authentication')) {
+                        showAuthErrorWithRefresh(job.error);
+                    }
+                    
                     currentUploadJob = null;
                     setTimeout(() => hideProgress(), 5000);
                 }
@@ -2160,5 +2291,63 @@ function formatTime(seconds) {
         return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     } else {
         return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+}
+
+function showQuotaError(message) {
+    const quotaInfo = `
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="bi bi-exclamation-triangle text-yellow-400 text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">YouTube API Quota Terlampaui</h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <p><strong>Masalah:</strong> ${message}</p>
+                        <div class="mt-3">
+                            <p><strong>Informasi Quota YouTube:</strong></p>
+                            <ul class="list-disc ml-5 mt-1">
+                                <li>Default quota: 10,000 units per hari</li>
+                                <li>Upload video: 1,600 units per upload</li>
+                                <li>Maksimal upload: ~6 video per hari</li>
+                                <li>Quota reset: Setiap hari pada 00:00 UTC</li>
+                            </ul>
+                        </div>
+                        <div class="mt-3">
+                            <p><strong>Solusi:</strong></p>
+                            <ul class="list-disc ml-5 mt-1">
+                                <li>Tunggu hingga quota reset besok</li>
+                                <li>Atau request quota extension dari Google Cloud Console</li>
+                                <li>Cek quota usage di: <a href="https://console.cloud.google.com" target="_blank" class="text-blue-600 hover:text-blue-800">Google API Console</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    showToast('YouTube API quota terlampaui. Lihat detail di atas.', 'error');
+    
+    // Insert quota info into upload section
+    const uploadTab = document.getElementById('uploadTab');
+    if (uploadTab) {
+        const existingQuotaInfo = uploadTab.querySelector('.quota-error-info');
+        if (existingQuotaInfo) {
+            existingQuotaInfo.remove();
+        }
+        
+        const quotaDiv = document.createElement('div');
+        quotaDiv.className = 'quota-error-info';
+        quotaDiv.innerHTML = quotaInfo;
+        uploadTab.insertBefore(quotaDiv, uploadTab.firstChild);
+        
+        // Auto remove after 30 seconds
+        setTimeout(() => {
+            if (quotaDiv && quotaDiv.parentNode) {
+                quotaDiv.remove();
+            }
+        }, 30000);
     }
 } 

@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs-extra');
 require('dotenv').config();
@@ -11,7 +10,7 @@ const youtubeController = require('./controllers/youtubeController');
 const logger = require('./utils/logger');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3031;
 
 // Security middleware
 app.use(helmet({
@@ -34,17 +33,9 @@ app.use(helmet({
   }
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Terlalu banyak request dari IP ini, coba lagi nanti.'
-});
-app.use(limiter);
-
 // CORS configuration
 app.use(cors({
-  origin: ['https://prafunschool.web.id', 'http://localhost:3000'],
+  origin: ['https://prafunschool.web.id', 'http://localhost:3031'],
   credentials: true
 }));
 
@@ -89,6 +80,7 @@ app.get('/api/download-file/:jobId', videoController.downloadFile);
 app.post('/api/save-credentials', youtubeController.saveCredentials);
 app.get('/api/auth/status', youtubeController.getAuthStatus);
 app.post('/api/auth/disconnect', youtubeController.disconnectAuth);
+app.post('/api/auth/refresh', youtubeController.refreshAuth);
 app.delete('/api/clear-all', videoController.clearAllFiles);
 
 // Error handling middleware

@@ -82,6 +82,61 @@
             transform: translateX(100%);
             transition: transform 0.3s ease-in;
         }
+        
+        /* Ad Styles */
+        .ad-container {
+            transition: all 0.3s ease;
+        }
+        .ad-container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .dark .ad-container:hover {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Corner Ad Styles */
+        #cornerAd {
+            transition: all 0.3s ease;
+        }
+        
+        #cornerAd:hover {
+            transform: scale(1.05);
+        }
+        
+        /* Responsive Corner Ad */
+        @media (max-width: 768px) {
+            #cornerAd {
+                width: 160px !important;
+                height: 100px !important;
+                bottom: 80px !important; /* Avoid mobile nav */
+            }
+        }
+        
+        @media (max-width: 480px) {
+            #cornerAd {
+                width: 140px !important;
+                height: 90px !important;
+                bottom: 90px !important;
+                right: 8px !important;
+            }
+        }
+        
+        /* Ad Loading Animation */
+        .ad-loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        .dark .ad-loading {
+            background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+            background-size: 200% 100%;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
@@ -139,6 +194,8 @@
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header Banner Ad - DIHAPUS -->
+
         <!-- Download Tab -->
         <div id="downloadTab" class="tab-content active">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -242,7 +299,11 @@
                         </button>
                     </form>
                 </div>
+
+                <!-- Sidebar Ad - DIHAPUS -->
             </div>
+
+            <!-- Middle Content Ad - DIHAPUS -->
 
             <!-- Video Preview Modal -->
             <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
@@ -370,56 +431,58 @@
                         </button>
                     </form>
                 </div>
+
+                <!-- Upload Sidebar Ad - DIHAPUS -->
             </div>
         </div>
 
         <!-- History Tab -->
         <div id="historyTab" class="tab-content">
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-                    <h2 class="text-2xl font-bold flex items-center">
-                        <i class="bi bi-clock-history mr-3 text-primary-600"></i>
-                        Job History
-                    </h2>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="exportHistoryBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
-                            <i class="bi bi-download mr-2"></i>Export
-                        </button>
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
+                            <h2 class="text-2xl font-bold flex items-center">
+                                <i class="bi bi-clock-history mr-3 text-primary-600"></i>
+                                Job History
+                            </h2>
+                            <div class="flex flex-wrap gap-2">
+                                <button id="exportHistoryBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                                    <i class="bi bi-download mr-2"></i>Export
+                                </button>
+                                
+                                <button id="clearAllHistoryBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
+                                    <i class="bi bi-trash mr-2"></i>Clear All
+                                </button>
+                            </div>
+                        </div>
                         
-                        <button id="clearAllHistoryBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center">
-                            <i class="bi bi-trash mr-2"></i>Clear All
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- History Filters -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                    <div>
-                        <label class="block text-sm font-medium mb-2">Filter by Type</label>
-                        <select id="historyTypeFilter" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                            <option value="">All Types</option>
-                            <option value="download">Downloads</option>
-                            <option value="upload">Uploads</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2">Filter by Status</label>
-                        <select id="historyStatusFilter" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
-                            <option value="">All Status</option>
-                            <option value="completed">Completed</option>
-                            <option value="error">Error</option>
-                            <option value="downloading">In Progress</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2">Search</label>
-                        <input type="text" id="historySearch" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Search by title...">
-                    </div>
-                </div>
-                
-                <div id="jobsList" class="space-y-4">
-                    <!-- History items will be populated here -->
-                </div>
+                        <!-- History Filters -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Filter by Type</label>
+                                <select id="historyTypeFilter" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                    <option value="">All Types</option>
+                                    <option value="download">Downloads</option>
+                                    <option value="upload">Uploads</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Filter by Status</label>
+                                <select id="historyStatusFilter" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700">
+                                    <option value="">All Status</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="error">Error</option>
+                                    <option value="downloading">In Progress</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Search</label>
+                                <input type="text" id="historySearch" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="Search by title...">
+                            </div>
+                        </div>
+                        
+                        <div id="jobsList" class="space-y-4">
+                            <!-- History items will be populated here -->
+                        </div>
             </div>
         </div>
 
@@ -610,14 +673,11 @@
             </div>
         </div>
     </main>
-
-
-
-    <!-- Toast Notifications -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2">
-        <!-- Toast notifications will be added here -->
+    <!-- Single Corner Ad - Pojok Kanan Bawah -->
+    <div id="cornerAd" class="fixed bottom-4 right-4 z-40 w-48 h-32">
+        <!-- Ad akan dimuat oleh ads-manager.js -->
     </div>
-
+    <script src="ads-manager.js"></script>
     <script src="app.js"></script>
 </body>
 </html> 
