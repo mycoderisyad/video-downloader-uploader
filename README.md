@@ -1,272 +1,292 @@
-# 🎬 Video Downloader & YouTube Uploader
+# 🎥 Video Downloader & Uploader
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
-[![Express.js](https://img.shields.io/badge/Express.js-4.19-blue.svg)](https://expressjs.com/)
+A powerful web application for downloading videos from multiple platforms and uploading them to YouTube with advanced features and modern UI.
 
-**Aplikasi web lengkap untuk download video dari berbagai platform dan upload otomatis ke YouTube**
+## 🌟 Features
 
-## ✨ Fitur Utama
+### 📥 Download System
+- **Multi-Platform Support**: YouTube, Instagram, TikTok, Facebook, Twitter, and more
+- **Quality Selection**: Choose from best, 1080p, 720p, 480p, 360p
+- **Download Modes**: Server download or direct download
+- **Batch Download**: Download multiple videos simultaneously
+- **Real-time Progress**: Live progress tracking with speed and ETA
 
-### 🔽 Download Video
-- **Multi-Platform Support**: YouTube, Instagram, TikTok, Facebook, Vimeo
-- **Quality Selection**: 360p, 480p, 720p, 1080p, atau Best Quality
-- **Batch Download**: Download multiple videos sekaligus
-- **Real-time Progress**: Live progress tracking dengan speed & ETA
-- **Smart URL Cleaning**: Otomatis membersihkan URL dari karakter tidak valid
+### 📤 Upload System
+- **Upload via Link**: Direct download and upload to YouTube
+- **Upload from Downloaded**: Upload previously downloaded videos
+- **Upload from Local Files**: Upload user's local video files
+- **Multi-mode Interface**: Single card with mode switching
+- **YouTube Integration**: Full OAuth2 authentication
+- **Progress Tracking**: Two-phase progress for direct uploads
 
-### 📤 YouTube Upload
-- **OAuth2 Authentication**: Secure Google authentication
-- **Batch Upload**: Upload multiple videos sekaligus
-- **Custom Metadata**: Title, description, tags, privacy settings
-- **Progress Tracking**: Real-time upload progress monitoring
-- **Local Credential Storage**: Credentials disimpan lokal untuk keamanan maksimal
+### 🔐 Authentication & Security
+- **YouTube OAuth2**: Secure authentication flow
+- **Session Management**: Per-user token storage
+- **Local Credentials**: Secure local credential storage
+- **Auto Token Refresh**: Automatic token renewal
+- **Security Headers**: CSP, CORS, and other security measures
 
-### 🎯 User Experience
-- **Modern UI**: Responsive design dengan Tailwind CSS
-- **Dark Mode**: Toggle dark/light theme
-- **Drag & Drop**: Upload files dengan drag and drop
-- **History Management**: Track semua download/upload jobs
-- **Toast Notifications**: Real-time feedback untuk semua actions
-- **Tab Persistence**: Mengingat tab terakhir yang dibuka
+### 📊 Management & Monitoring
+- **Job History**: Complete download/upload history
+- **Real-time Status**: Live job status tracking
+- **Export/Import**: History data management
+- **Auto Cleanup**: Automatic file and job cleanup
+- **Error Handling**: Comprehensive error management
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
-- FFmpeg (untuk video processing)
-- PM2 (untuk production deployment)
+- Node.js 16+ 
+- npm or yarn
+- yt-dlp installed globally
+- YouTube API credentials (for upload features)
 
 ### Installation
 
-1. **Clone Repository**
+1. **Clone the repository**
 ```bash
 git clone https://github.com/mycoderisyad/video-downloader-uploader.git
 cd video-downloader-uploader
 ```
 
-2. **Install Dependencies**
+2. **Install dependencies**
 ```bash
 npm install
 ```
 
-3. **Setup Environment**
+3. **Set up environment variables**
 ```bash
 cp env.example .env
-# Edit .env file dengan konfigurasi Anda
+# Edit .env with your configuration
 ```
 
-4. **Install System Dependencies**
+4. **Run the application**
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install ffmpeg yt-dlp
-
-# Atau gunakan script otomatis
-chmod +x install-dependencies.sh
-./install-dependencies.sh
-```
-
-5. **Start Application**
-```bash
-# Development
-npm run dev
-
-# Production
 npm start
-
-# Dengan PM2
-pm2 start ecosystem.config.js
+# or
+./start.sh
 ```
 
-## 🔧 Configuration
+5. **Access the application**
+- Local: http://127.0.0.1:3031
+- Production: https://prafunschool.web.id
 
-### Environment Variables (.env)
-```env
-# Server Configuration
-PORT=3031
-NODE_ENV=production
+## 🔄 Application Workflow
 
-# YouTube API (Optional - bisa diset via UI)
-YOUTUBE_CLIENT_ID=your_client_id.apps.googleusercontent.com
-YOUTUBE_CLIENT_SECRET=your_client_secret
-YOUTUBE_REDIRECT_URI=https://yourdomain.com/api/auth/youtube/callback
+### 📥 Download Workflow
+
+```mermaid
+graph TD
+    A[User enters video URL] --> B{Validate URL}
+    B -->|Invalid| C[Show error message]
+    B -->|Valid| D[Detect platform]
+    D --> E[Create download job]
+    E --> F[Start yt-dlp process]
+    F --> G[Monitor progress]
+    G --> H{Download complete?}
+    H -->|No| I[Update progress]
+    I --> G
+    H -->|Yes| J[Save to downloads folder]
+    J --> K[Update job status to completed]
+    K --> L[Show download link or auto-download]
 ```
 
-### YouTube API Setup
+### 📤 Upload Workflow
 
-1. **Buat Project di Google Cloud Console**
-   - Kunjungi [Google Cloud Console](https://console.cloud.google.com/)
-   - Buat project baru atau pilih existing project
+#### Upload via Link Flow
+```mermaid
+graph TD
+    A[User enters video URL + metadata] --> B{Check YouTube auth}
+    B -->|Not authenticated| C[Redirect to OAuth]
+    B -->|Authenticated| D[Create upload job]
+    D --> E[Phase 1: Download video]
+    E --> F[Monitor download progress 0-50%]
+    F --> G{Download complete?}
+    G -->|No| F
+    G -->|Yes| H[Phase 2: Upload to YouTube]
+    H --> I[Monitor upload progress 50-100%]
+    I --> J{Upload complete?}
+    J -->|No| I
+    J -->|Yes| K[Get YouTube video ID]
+    K --> L[Show 'View on YouTube' button]
+    L --> M[Auto cleanup temp files]
+```
 
-2. **Enable YouTube Data API v3**
-   - Di sidebar, pilih "APIs & Services" > "Library"
-   - Cari "YouTube Data API v3" dan enable
+#### Upload from Downloaded Flow
+```mermaid
+graph TD
+    A[User selects downloaded video] --> B{Check YouTube auth}
+    B -->|Not authenticated| C[Redirect to OAuth]
+    B -->|Authenticated| D[Validate download job]
+    D --> E{File exists?}
+    E -->|No| F[Show error]
+    E -->|Yes| G[Create upload job]
+    G --> H[Start YouTube upload]
+    H --> I[Monitor progress 0-100%]
+    I --> J{Upload complete?}
+    J -->|No| I
+    J -->|Yes| K[Get YouTube video ID]
+    K --> L[Show 'View on YouTube' button]
+```
 
-3. **Buat OAuth2 Credentials**
-   - Pilih "APIs & Services" > "Credentials"
-   - Klik "Create Credentials" > "OAuth 2.0 Client IDs"
-   - Application type: "Web application"
-   - Authorized redirect URIs: `https://yourdomain.com/api/auth/youtube/callback`
+### 🔐 Authentication Flow
 
-4. **Configure di Aplikasi**
-   - Buka aplikasi di browser
-   - Masuk ke tab "Settings"
-   - Masukkan Client ID, Client Secret, dan Redirect URI
-   - Klik "Save Credentials"
-
-## 📖 Usage Guide
-
-### Download Video
-
-1. **Single Download**
-   - Paste URL video di tab "Download"
-   - Pilih quality yang diinginkan
-   - Klik "Download Video"
-   - Monitor progress di real-time
-
-2. **Batch Download**
-   - Masukkan multiple URLs (satu per baris)
-   - Pilih quality untuk semua video
-   - Klik "Start Batch Download"
-
-### Upload ke YouTube
-
-1. **Setup Authentication**
-   - Masuk ke tab "Settings"
-   - Masukkan YouTube API credentials
-   - Klik "Authenticate with YouTube"
-   - Complete OAuth flow di browser
-
-2. **Single Upload**
-   - Pilih downloaded video dari dropdown
-   - Isi title, description, privacy setting
-   - Klik "Upload to YouTube"
-
-3. **Batch Upload**
-   - Pilih multiple videos dari list
-   - Set default privacy dan tags
-   - Klik "Start Batch Upload"
+```mermaid
+graph TD
+    A[User clicks 'Connect to YouTube'] --> B[Check saved credentials]
+    B --> C{Credentials exist?}
+    C -->|No| D[Show credentials form]
+    D --> E[User enters Client ID/Secret]
+    E --> F[Save credentials locally]
+    F --> G[Generate OAuth URL]
+    C -->|Yes| G
+    G --> H[Open OAuth popup]
+    H --> I[User grants permissions]
+    I --> J[Receive authorization code]
+    J --> K[Exchange code for tokens]
+    K --> L[Store tokens in session]
+    L --> M[Update UI to connected state]
+    M --> N[Enable upload features]
+```
 
 ## 🏗️ Architecture
 
 ### Backend Structure
 ```
-├── server.js              # Main server file
+├── server.js                 # Main server file
 ├── controllers/
-│   ├── videoController.js # Download logic & file management
-│   └── youtubeController.js # YouTube API & OAuth handling
+│   ├── videoController.js    # Download logic
+│   └── youtubeController.js  # Upload & auth logic
 ├── utils/
-│   └── logger.js          # Winston logging configuration
-├── public/
-│   ├── index.html         # Main UI
-│   └── app.js            # Frontend JavaScript
-├── downloads/             # Downloaded videos storage
-├── uploads/              # Temporary upload files
-├── config/               # Configuration files
-└── logs/                 # Application logs
+│   └── logger.js            # Logging utility
+├── public/                  # Frontend files
+├── downloads/               # Downloaded videos
+├── uploads/                 # Uploaded files
+├── temp/                    # Temporary files
+└── logs/                    # Application logs
 ```
 
-### Key Technologies
-- **Backend**: Node.js, Express.js
-- **Frontend**: Vanilla JavaScript, Tailwind CSS
-- **Video Processing**: FFmpeg, yt-dlp, youtube-dl-exec
-- **Authentication**: Google OAuth2
-- **Process Management**: PM2
-- **Security**: Helmet.js, CORS
-
-## 🔒 Security Features
-
-- **Local Credential Storage**: YouTube credentials disimpan lokal, tidak di database
-- **Session-based Auth**: Per-user authentication sessions
-- **CORS Protection**: Configured untuk domain yang diizinkan
-- **Helmet Security**: Security headers untuk production
-- **Input Validation**: Sanitization untuk semua user inputs
-- **Rate Limiting**: Built-in protection via proxy trust
-
-## 📊 API Endpoints
-
-### Download Endpoints
+### Frontend Structure
 ```
-POST /api/download          # Start video download
-GET  /api/download-status/:jobId # Get download progress
-GET  /api/download-file/:jobId   # Download completed file
-POST /api/preview           # Preview video info
+public/
+├── index.html              # Main HTML file
+├── app.js                  # Main JavaScript logic
+├── api-docs.html          # API documentation
+└── assets/                # Static assets
 ```
 
-### YouTube Endpoints
-```
-POST /api/auth/youtube      # Initiate OAuth flow
-GET  /api/auth/youtube/callback # OAuth callback
-GET  /api/auth/status       # Check auth status
-POST /api/auth/status       # Check auth with credentials
-POST /api/auth/disconnect   # Disconnect YouTube
-POST /api/upload-youtube    # Upload video to YouTube
-GET  /api/upload-status/:jobId # Get upload progress
+### Key Components
+
+#### 🎯 Core Services
+- **Video Controller**: Handles download operations
+- **YouTube Controller**: Manages upload and authentication
+- **Logger**: Centralized logging system
+- **Job Manager**: Tracks and manages all operations
+
+#### 🔄 Data Flow
+1. **Frontend** sends requests to REST API
+2. **Controllers** process requests and manage jobs
+3. **External Tools** (yt-dlp) handle video processing
+4. **Storage** manages files and job data
+5. **Real-time Updates** via polling mechanism
+
+## 📡 API Documentation
+
+Complete API documentation is available at `/api-docs` when the server is running.
+
+### Key Endpoints
+
+#### Download
+- `POST /api/download` - Start video download
+- `GET /api/download-status/:jobId` - Get download status
+
+#### Upload
+- `POST /api/upload-via-link` - Download and upload to YouTube
+- `POST /api/upload-youtube` - Upload downloaded video
+- `GET /api/upload-status/:jobId` - Get upload status
+
+#### Authentication
+- `GET /api/auth/youtube` - Initiate OAuth flow
+- `POST /api/auth/status` - Check auth status
+- `POST /api/auth/disconnect` - Disconnect from YouTube
+
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+# Server Configuration
+PORT=3031
+NODE_ENV=production
+
+# YouTube API (Optional - can be set via UI)
+YOUTUBE_CLIENT_ID=your_client_id
+YOUTUBE_CLIENT_SECRET=your_client_secret
+YOUTUBE_REDIRECT_URI=https://yourdomain.com/api/auth/youtube/callback
 ```
 
-### Utility Endpoints
+### YouTube API Setup
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable YouTube Data API v3
+4. Create OAuth 2.0 credentials
+5. Add authorized redirect URI: `https://yourdomain.com/api/auth/youtube/callback`
+6. Enter credentials in the app's Settings tab
+
+## 🧪 Testing
+
+### Automated Testing
+Run comprehensive tests:
+```bash
+./test-all-features.sh
 ```
-POST /api/save-credentials  # Save YouTube credentials
-DELETE /api/cleanup/:jobId  # Cleanup files
-DELETE /api/clear-all       # Clear all files
-```
+
+### Manual Testing
+1. **Download Test**: Try downloading from different platforms
+2. **Upload Test**: Test all three upload modes
+3. **Auth Test**: Test YouTube authentication flow
+4. **Error Test**: Test error handling with invalid inputs
 
 ## 🚀 Deployment
 
-### Production Setup
-
-1. **Server Requirements**
-   - Ubuntu 20.04+ atau CentOS 8+
-   - Node.js 18+
-   - Nginx (recommended)
-   - PM2 untuk process management
-
-2. **Deploy dengan PM2**
+### Production Deployment
 ```bash
-# Install PM2 globally
+# Using PM2
 npm install -g pm2
-
-# Start application
 pm2 start ecosystem.config.js
-
-# Setup auto-restart
-pm2 startup
 pm2 save
+pm2 startup
 ```
 
-3. **Nginx Configuration**
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;
-    
-    location / {
-        proxy_pass http://localhost:3031;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-4. **SSL dengan Let's Encrypt**
+### Docker Deployment
 ```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com
+# Build image
+docker build -t video-downloader .
+
+# Run container
+docker run -d -p 3031:3031 video-downloader
 ```
 
-### Auto-Update Script
+### Manual Deployment
 ```bash
-# Gunakan script update otomatis
-chmod +x update-production.sh
-./update-production.sh
+# Install dependencies
+npm install --production
+
+# Start server
+npm start
 ```
+
+## 📊 Monitoring
+
+### PM2 Monitoring
+```bash
+pm2 status                 # Check process status
+pm2 logs video-downloader  # View logs
+pm2 monit                  # Real-time monitoring
+```
+
+### Health Checks
+- Server health: `GET /`
+- API health: `GET /api/auth/status`
 
 ## 🛠️ Development
 
@@ -277,100 +297,63 @@ npm install
 
 # Start development server
 npm run dev
-
-# Server akan berjalan di http://localhost:3031
+# or
+node server.js
 ```
 
-### Project Scripts
-```bash
-npm start          # Production start
-npm run dev        # Development dengan nodemon
-```
+### Code Structure
+- **MVC Pattern**: Separation of concerns
+- **RESTful API**: Standard HTTP methods
+- **Error Handling**: Comprehensive error management
+- **Logging**: Structured logging with Winston
+- **Security**: CORS, CSP, and input validation
 
-### Logging
-- **Development**: Console output dengan colors
-- **Production**: File logging di `logs/` directory
-- **Levels**: Error, Warn, Info, Debug
-
-## 🔧 Troubleshooting
+## 🔍 Troubleshooting
 
 ### Common Issues
 
-1. **FFmpeg not found**
-```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
+#### Download Issues
+- **yt-dlp not found**: Install yt-dlp globally
+- **Unsupported URL**: Check platform support
+- **Network errors**: Check internet connection
 
-# CentOS/RHEL
-sudo yum install ffmpeg
-```
+#### Upload Issues
+- **Authentication failed**: Check YouTube credentials
+- **Quota exceeded**: YouTube API has daily limits
+- **File not found**: Ensure download completed successfully
 
-2. **yt-dlp outdated**
-```bash
-# Update yt-dlp
-sudo pip3 install --upgrade yt-dlp
-```
-
-3. **Permission errors**
-```bash
-# Fix file permissions
-chmod +x *.sh
-sudo chown -R $USER:$USER downloads/ uploads/
-```
-
-4. **Port already in use**
-```bash
-# Check what's using port 3031
-sudo lsof -i :3031
-
-# Kill process if needed
-sudo kill -9 <PID>
-```
-
-5. **YouTube quota exceeded**
-   - YouTube API memiliki quota limit harian
-   - Monitor usage di Google Cloud Console
-   - Consider multiple API keys untuk high-volume usage
+#### Server Issues
+- **Port in use**: Change PORT in .env
+- **Permission denied**: Check file permissions
+- **Memory issues**: Monitor with `pm2 monit`
 
 ### Debug Mode
 ```bash
 # Enable debug logging
 NODE_ENV=development npm start
-
-# Check logs
-tail -f logs/app.log
 ```
 
-## 📈 Performance Tips
+## 📈 Performance
 
-1. **Server Optimization**
-   - Gunakan PM2 cluster mode untuk multiple cores
-   - Setup Nginx untuk static file serving
-   - Enable gzip compression
+### Optimization Features
+- **Concurrent Downloads**: Multiple simultaneous downloads
+- **Progress Streaming**: Real-time progress updates
+- **Memory Management**: Automatic cleanup of temporary files
+- **Caching**: Efficient job status caching
 
-2. **Storage Management**
-   - Auto-cleanup files older than 24 hours
-   - Monitor disk space usage
-   - Consider cloud storage untuk large files
-
-3. **Network Optimization**
-   - Use CDN untuk static assets
-   - Enable HTTP/2
-   - Optimize video quality vs file size
+### Resource Usage
+- **Memory**: ~20-50MB base usage
+- **CPU**: Varies with concurrent jobs
+- **Storage**: Temporary files auto-cleaned
+- **Network**: Depends on video sizes
 
 ## 🤝 Contributing
 
-1. Fork repository
+1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open Pull Request
-
-### Development Guidelines
-- Follow ESLint configuration
-- Add tests untuk new features
-- Update documentation
-- Ensure backward compatibility
 
 ## 📄 License
 
@@ -379,19 +362,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) - Video downloading
-- [FFmpeg](https://ffmpeg.org/) - Video processing
 - [Google APIs](https://developers.google.com/youtube) - YouTube integration
-- [Tailwind CSS](https://tailwindcss.com/) - UI framework
 - [Express.js](https://expressjs.com/) - Web framework
+- [Tailwind CSS](https://tailwindcss.com/) - UI styling
 
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/mycoderisyad/video-downloader-uploader/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/mycoderisyad/video-downloader-uploader/discussions)
-- **Email**: mycoderisyad@gmail.com
+- **Documentation**: Available at `/api-docs`
+- **Testing**: Run `./test-all-features.sh`
 
 ---
 
-**Made with ❤️ by [mycoderisyad](https://github.com/mycoderisyad)**
-
-> 🌟 Jika project ini membantu Anda, berikan star di GitHub! 
+**Made with ❤️ for seamless video downloading and uploading** 
