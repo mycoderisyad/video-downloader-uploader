@@ -17,7 +17,7 @@ const userCredentials = new Map();
 // OAuth2 credentials - these should be set in .env file
 const CLIENT_ID = process.env.YOUTUBE_CLIENT_ID;
 const CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET;
-const REDIRECT_URI = process.env.YOUTUBE_REDIRECT_URI || `https://prafunschool.web.id/api/auth/youtube/callback`;
+const REDIRECT_URI = process.env.YOUTUBE_REDIRECT_URI;
 
 // Generate user session ID from request
 const getUserSessionId = (req) => {
@@ -48,7 +48,7 @@ const initiateAuth = async (req, res) => {
     if (req.body && req.body.clientId && req.body.clientSecret) {
       clientId = req.body.clientId;
       clientSecret = req.body.clientSecret;
-      redirectUri = req.body.redirectUri || REDIRECT_URI;
+      redirectUri = req.body.redirectUri || REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/youtube/callback`;
       
       logger.info('Using credentials from request (local-only mode)');
     } else {
@@ -59,14 +59,14 @@ const initiateAuth = async (req, res) => {
         const savedCredentials = await fs.readJson(credentialsPath);
         clientId = savedCredentials.clientId;
         clientSecret = savedCredentials.clientSecret;
-        redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+        redirectUri = savedCredentials.redirectUri || REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/youtube/callback`;
         
         logger.info('Using credentials from file (legacy mode)');
       } else {
         // Try environment variables as last resort
         clientId = CLIENT_ID;
         clientSecret = CLIENT_SECRET;
-        redirectUri = REDIRECT_URI;
+        redirectUri = REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/youtube/callback`;
         
         if (clientId && clientSecret) {
           logger.info('Using credentials from environment variables');
@@ -161,14 +161,14 @@ const handleCallback = async (req, res) => {
         const savedCredentials = await fs.readJson(credentialsPath);
         clientId = savedCredentials.clientId;
         clientSecret = savedCredentials.clientSecret;
-        redirectUri = savedCredentials.redirectUri || REDIRECT_URI;
+        redirectUri = savedCredentials.redirectUri || REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/youtube/callback`;
         
         logger.info('Using saved credentials for callback');
       } else {
         // Last resort: environment variables
         clientId = CLIENT_ID;
         clientSecret = CLIENT_SECRET;
-        redirectUri = REDIRECT_URI;
+        redirectUri = REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/youtube/callback`;
         
         if (clientId && clientSecret) {
           logger.info('Using environment credentials for callback');
@@ -591,7 +591,7 @@ const startYouTubeUpload = async (uploadJobId, videoPath, metadata, userSessionI
     const uploadOAuth2Client = new google.auth.OAuth2(
       savedCredentials.clientId,
       savedCredentials.clientSecret,
-      savedCredentials.redirectUri || REDIRECT_URI
+      savedCredentials.redirectUri || REDIRECT_URI || 'http://localhost:3031/api/auth/youtube/callback'
     );
 
     // Set the tokens

@@ -1,0 +1,42 @@
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+downloads/
+uploads/
+temp/
+logs/
+
+# Environment files
+.env
+.env.*
+
+# Version control
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Test files
+test/
+coverage/
+
+# Build artifacts
+dist/
+build/ 

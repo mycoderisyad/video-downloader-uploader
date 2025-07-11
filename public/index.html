@@ -631,7 +631,7 @@
                             <p><strong>Langkah 2:</strong> Buat project baru atau pilih project yang ada</p>
                             <p><strong>Langkah 3:</strong> Aktifkan YouTube Data API v3 di Library</p>
                             <p><strong>Langkah 4:</strong> Buat OAuth 2.0 Client ID di Credentials</p>
-                            <p><strong>Langkah 5:</strong> Tambahkan Redirect URI: <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded">https://prafunschool.web.id/api/auth/youtube/callback</code></p>
+                            <p><strong>Langkah 5:</strong> Tambahkan Redirect URI: <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded" id="currentRedirectUri">Loading...</code></p>
                             <p><strong>Langkah 6:</strong> Copy Client ID dan Client Secret ke form di bawah</p>
                         </div>
                     </div>
@@ -648,7 +648,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium mb-2">Redirect URI</label>
-                                <input type="url" id="redirectUri" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="https://prafunschool.web.id/api/auth/youtube/callback" value="https://prafunschool.web.id/api/auth/youtube/callback" readonly>
+                                <input type="url" id="redirectUri" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-700" placeholder="" value="" readonly>
                                 <p class="text-xs text-green-600 dark:text-green-400 mt-1"><i class="bi bi-check-circle mr-1"></i>URL callback sudah benar untuk domain ini</p>
                             </div>
                             <button id="saveCredentialsBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center">

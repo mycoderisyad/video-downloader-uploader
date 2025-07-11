@@ -113,6 +113,10 @@ async function initializeApp() {
     console.log('🚀 Initializing app...');
     
     try {
+        // Setup dynamic redirect URI
+        setupDynamicRedirectUri();
+        console.log('✅ Dynamic redirect URI setup');
+        
         // Load settings first
         loadSettings();
         console.log('✅ Settings loaded');
@@ -171,6 +175,27 @@ async function initializeApp() {
         console.error('❌ Error during app initialization:', error);
         showToast('Error initializing app: ' + error.message, 'error');
     }
+}
+
+// Setup dynamic redirect URI based on current domain
+function setupDynamicRedirectUri() {
+    const currentOrigin = window.location.origin;
+    const redirectUri = `${currentOrigin}/api/auth/youtube/callback`;
+    
+    // Update redirect URI input
+    const redirectUriInput = document.getElementById('redirectUri');
+    if (redirectUriInput) {
+        redirectUriInput.value = redirectUri;
+        redirectUriInput.placeholder = redirectUri;
+    }
+    
+    // Update instructions with current redirect URI
+    const currentRedirectUriElement = document.getElementById('currentRedirectUri');
+    if (currentRedirectUriElement) {
+        currentRedirectUriElement.textContent = redirectUri;
+    }
+    
+    console.log('Dynamic redirect URI set to:', redirectUri);
 }
 
 // Enhanced tab restoration with better timing and fallback
@@ -1784,7 +1809,7 @@ function createJobElement(job) {
                     return;
                 }
                 
-                console.log('🔽 Manual download button clicked for job:', job.id);
+                console.log('Manual download button clicked for job:', job.id);
                 
                 // Disable button temporarily to prevent double clicks
                 downloadBtn.disabled = true;
@@ -1813,7 +1838,7 @@ function createJobElement(job) {
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                console.log('🗑️ Delete button clicked for job:', job.id);
+                console.log('Delete button clicked for job:', job.id);
                 deleteJob(job.id, job.type);
             });
         }
@@ -2646,7 +2671,7 @@ window.removeToast = removeToast;
 
 // Global functions for job management
 window.deleteJob = async function(jobId, jobType) {
-    console.log('🗑️ deleteJob called with:', { jobId, jobType });
+    console.log('deleteJob called with:', { jobId, jobType });
     
     // First check if job exists locally
     const job = downloadJobs.get(jobId) || uploadJobs.get(jobId) || batchJobs.get(jobId);
@@ -2700,7 +2725,7 @@ window.deleteJob = async function(jobId, jobType) {
             updateDownloadJobSelect();
             
             showToast('Job berhasil dihapus!', 'success');
-            console.log('✅ Job deleted successfully');
+            console.log('Job deleted successfully');
         } else {
             // Even if server fails, remove from local storage
             downloadJobs.delete(jobId);
@@ -2730,11 +2755,11 @@ window.deleteJob = async function(jobId, jobType) {
 };
 
 window.downloadJobFile = async function(jobId, trigger = 'unknown') {
-    console.log('🔽 downloadJobFile called with jobId:', jobId, 'trigger:', trigger);
+            console.log('downloadJobFile called with jobId:', jobId, 'trigger:', trigger);
     
     // Prevent multiple simultaneous downloads for the same job
     if (window.activeDownloads && window.activeDownloads.has(jobId)) {
-        console.log('⚠️ Download already in progress for job:', jobId);
+        console.log('WARNING: Download already in progress for job:', jobId);
         showToast('Download sudah dalam proses!', 'warning');
         return;
     }
@@ -3114,7 +3139,7 @@ function cleanupInvalidJobs() {
         if (!job || !job.id || typeof job.id !== 'string' || job.id === 'undefined') {
             downloadJobs.delete(id);
             cleaned = true;
-            console.log('🧹 Removed invalid download job:', id, job);
+            console.log('Removed invalid download job:', id, job);
         }
     }
     
@@ -3123,14 +3148,14 @@ function cleanupInvalidJobs() {
         if (!job || !job.id || typeof job.id !== 'string' || job.id === 'undefined') {
             uploadJobs.delete(id);
             cleaned = true;
-            console.log('🧹 Removed invalid upload job:', id, job);
+            console.log('Removed invalid upload job:', id, job);
         }
     }
     
     // Save cleaned data back to storage
     if (cleaned) {
         saveJobsToStorage();
-        console.log('✅ Invalid jobs cleaned up and storage updated');
+        console.log('Invalid jobs cleaned up and storage updated');
         
         // Update UI
         updateJobsList();

@@ -11,12 +11,139 @@ const downloadJobs = new Map();
 const batchJobs = new Map();
 
 // Set FFmpeg path (adjust based on your system)
-// For Ubuntu/Debian: ffmpeg is usually in /usr/bin/ffmpeg
+// Auto-detect FFmpeg path for different operating systems
 try {
-  ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
-  ffmpeg.setFfprobePath('/usr/bin/ffprobe');
+  const os = require('os');
+  const { execSync } = require('child_process');
+  
+  // Try to detect FFmpeg path automatically
+  let ffmpegPath = 'ffmpeg'; // Default to system PATH
+  let ffprobePath = 'ffprobe';
+  let pathFound = false;
+  
+  try {
+    // Try to get FFmpeg path from system
+    if (os.platform() === 'win32') {
+      // Windows: Try multiple detection methods and common paths
+      const windowsPaths = [
+        'C:\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
+        'D:\\ffmpeg\\bin\\ffmpeg.exe',
+        process.env.FFMPEG_PATH // User defined path
+      ].filter(Boolean);
+      
+      // First try 'where' command
+      try {
+        const whereResult = execSync('where ffmpeg 2>nul', { encoding: 'utf8' }).trim();
+        if (whereResult) {
+          ffmpegPath = whereResult.split('\n')[0];
+          ffprobePath = execSync('where ffprobe 2>nul', { encoding: 'utf8' }).trim().split('\n')[0] || ffmpegPath.replace('ffmpeg.exe', 'ffprobe.exe');
+          pathFound = true;
+          logger.info(`Found FFmpeg via 'where' command: ${ffmpegPath}`);
+        }
+      } catch (e) {
+        // 'where' command failed, try common paths
+        logger.info('FFmpeg not found in PATH, checking common Windows locations...');
+      }
+      
+      // If not found via 'where', try common paths
+      if (!pathFound) {
+        for (const tryPath of windowsPaths) {
+          try {
+            if (require('fs').existsSync(tryPath)) {
+              ffmpegPath = tryPath;
+              ffprobePath = tryPath.replace('ffmpeg.exe', 'ffprobe.exe');
+              pathFound = true;
+              logger.info(`Found FFmpeg at common path: ${ffmpegPath}`);
+              break;
+            }
+          } catch (e) {
+            // Continue trying other paths
+          }
+        }
+      }
+      
+      if (!pathFound) {
+        logger.warn('FFmpeg not found in common Windows locations');
+        logger.info('To install FFmpeg on Windows:');
+        logger.info('1. Run as Administrator: PowerShell -ExecutionPolicy Bypass -File install-ffmpeg-windows.ps1');
+        logger.info('2. Or download from: https://ffmpeg.org/download.html');
+        logger.info('3. Or install via chocolatey: choco install ffmpeg');
+      }
+      
+    } else {
+      // Linux/macOS: Try 'which' command and common paths
+      const unixPaths = [
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg',
+        '/opt/homebrew/bin/ffmpeg', // macOS Homebrew ARM
+        '/usr/local/Cellar/ffmpeg/*/bin/ffmpeg', // macOS Homebrew Intel
+        process.env.FFMPEG_PATH // User defined path
+      ].filter(Boolean);
+      
+      // First try 'which' command
+      try {
+        ffmpegPath = execSync('which ffmpeg 2>/dev/null', { encoding: 'utf8' }).trim();
+        ffprobePath = execSync('which ffprobe 2>/dev/null', { encoding: 'utf8' }).trim();
+        if (ffmpegPath && ffprobePath) {
+          pathFound = true;
+          logger.info(`Found FFmpeg via 'which' command: ${ffmpegPath}`);
+        }
+      } catch (e) {
+        // 'which' command failed, try common paths
+        logger.info('FFmpeg not found in PATH, checking common Unix locations...');
+      }
+      
+      // If not found via 'which', try common paths
+      if (!pathFound) {
+        for (const tryPath of unixPaths) {
+          try {
+            if (require('fs').existsSync(tryPath)) {
+              ffmpegPath = tryPath;
+              ffprobePath = tryPath.replace('ffmpeg', 'ffprobe');
+              pathFound = true;
+              logger.info(`Found FFmpeg at common path: ${ffmpegPath}`);
+              break;
+            }
+          } catch (e) {
+            // Continue trying other paths
+          }
+        }
+      }
+      
+      if (!pathFound) {
+        logger.warn('FFmpeg not found in common Unix locations');
+        logger.info('To install FFmpeg on Linux:');
+        logger.info('1. Run: chmod +x install-ffmpeg-linux.sh && ./install-ffmpeg-linux.sh');
+        logger.info('2. Or use package manager:');
+        logger.info('   Ubuntu/Debian: sudo apt install ffmpeg');
+        logger.info('   CentOS/RHEL: sudo dnf install ffmpeg');
+        logger.info('   Arch: sudo pacman -S ffmpeg');
+        logger.info('   macOS: brew install ffmpeg');
+      }
+    }
+    
+    // Set the paths (will use default 'ffmpeg'/'ffprobe' if not found)
+    ffmpeg.setFfmpegPath(ffmpegPath);
+    ffmpeg.setFfprobePath(ffprobePath);
+    
+    if (pathFound) {
+      logger.info(`FFmpeg configured successfully`);
+      logger.info(`FFmpeg path: ${ffmpegPath}`);
+      logger.info(`FFprobe path: ${ffprobePath}`);
+    } else {
+      logger.warn('FFmpeg not found, using system default (may cause errors)');
+      logger.info('Please install FFmpeg to use video processing features');
+    }
+    
+  } catch (e) {
+    logger.warn('Could not auto-detect FFmpeg path, using system default');
+    logger.error('FFmpeg detection error:', e.message);
+  }
 } catch (error) {
-  logger.warn('FFmpeg path not set, using system default');
+  logger.warn('FFmpeg path configuration failed, using system default');
+  logger.error('FFmpeg configuration error:', error.message);
 }
 
 // Platform-specific URL patterns

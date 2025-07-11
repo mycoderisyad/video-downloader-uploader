@@ -88,7 +88,7 @@
                     </p>
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <h4 class="font-semibold text-blue-900 mb-2">Base URL</h4>
-                        <code class="text-blue-800">https://prafunschool.web.id/api</code>
+                        <code id="baseUrl" class="text-blue-800">Loading...</code>
                     </div>
                 </section>
 
@@ -108,7 +108,7 @@
                         </div>
                         <p class="text-gray-600 mb-3">Initiates YouTube OAuth2 authentication flow.</p>
                         <div class="code-block">
-<pre>curl -X GET "https://prafunschool.web.id/api/auth/youtube"</pre>
+<pre id="authExample">curl -X GET "Loading.../api/auth/youtube"</pre>
                         </div>
                     </div>
 
@@ -120,12 +120,12 @@
                         </div>
                         <p class="text-gray-600 mb-3">Check current authentication status.</p>
                         <div class="code-block">
-<pre>curl -X POST "https://prafunschool.web.id/api/auth/status" \
+<pre id="statusExample">curl -X POST "Loading.../api/auth/status" \
   -H "Content-Type: application/json" \
   -d '{
     "clientId": "your-client-id",
     "clientSecret": "your-client-secret",
-    "redirectUri": "https://prafunschool.web.id/api/auth/youtube/callback"
+    "redirectUri": "Loading.../api/auth/youtube/callback"
   }'</pre>
                         </div>
                     </div>
@@ -138,7 +138,7 @@
                         </div>
                         <p class="text-gray-600 mb-3">Disconnect from YouTube and clear authentication.</p>
                         <div class="code-block">
-<pre>curl -X POST "https://prafunschool.web.id/api/auth/disconnect"</pre>
+<pre id="disconnectExample">curl -X POST "Loading.../api/auth/disconnect"</pre>
                         </div>
                     </div>
                 </section>
@@ -217,7 +217,7 @@
                         </div>
                         <p class="text-gray-600 mb-3">Get download job status and progress.</p>
                         <div class="code-block">
-<pre>curl -X GET "https://prafunschool.web.id/api/download-status/uuid-job-id"</pre>
+<pre id="downloadStatusExample">curl -X GET "Loading.../api/download-status/uuid-job-id"</pre>
                         </div>
                     </div>
                 </section>
@@ -288,7 +288,7 @@
                         </div>
                         <p class="text-gray-600 mb-3">Get upload job status and progress.</p>
                         <div class="code-block">
-<pre>curl -X GET "https://prafunschool.web.id/api/upload-status/uuid-upload-job-id"</pre>
+<pre id="uploadStatusExample">curl -X GET "Loading.../api/upload-status/uuid-upload-job-id"</pre>
                         </div>
                     </div>
                 </section>
@@ -445,6 +445,42 @@
     </div>
 
     <script>
+        // Setup dynamic URLs based on current domain
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentOrigin = window.location.origin;
+            const apiBase = `${currentOrigin}/api`;
+            
+            // Update base URL
+            const baseUrlElement = document.getElementById('baseUrl');
+            if (baseUrlElement) {
+                baseUrlElement.textContent = apiBase;
+            }
+            
+            // Update all example URLs
+            const examples = [
+                { id: 'authExample', text: `curl -X GET "${apiBase}/auth/youtube"` },
+                { id: 'statusExample', text: `curl -X POST "${apiBase}/auth/status" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "clientId": "your-client-id",
+    "clientSecret": "your-client-secret",
+    "redirectUri": "${currentOrigin}/api/auth/youtube/callback"
+  }'` },
+                { id: 'disconnectExample', text: `curl -X POST "${apiBase}/auth/disconnect"` },
+                { id: 'downloadStatusExample', text: `curl -X GET "${apiBase}/download-status/uuid-job-id"` },
+                { id: 'uploadStatusExample', text: `curl -X GET "${apiBase}/upload-status/uuid-upload-job-id"` }
+            ];
+            
+            examples.forEach(example => {
+                const element = document.getElementById(example.id);
+                if (element) {
+                    element.textContent = example.text;
+                }
+            });
+            
+            console.log('✅ API documentation URLs updated for domain:', currentOrigin);
+        });
+
         // Smooth scrolling for sidebar links
         document.querySelectorAll('.sidebar-link').forEach(link => {
             link.addEventListener('click', function(e) {

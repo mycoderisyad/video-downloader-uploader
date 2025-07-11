@@ -22,7 +22,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       mediaSrc: ["'self'", "https:", "blob:", "data:"],
-      connectSrc: ["'self'", "https://www.googleapis.com", "https://cdn.jsdelivr.net", "http://127.0.0.1:3031", "http://localhost:3031"],
+      connectSrc: ["'self'", "https://www.googleapis.com", "https://cdn.jsdelivr.net"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'self'"],
@@ -33,9 +33,13 @@ app.use(helmet({
   }
 }));
 
-// CORS configuration
+// CORS configuration - Allow configurable origins
+const corsOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:3031', 'http://127.0.0.1:3031']; // Default fallback
+
 app.use(cors({
-  origin: ['https://prafunschool.web.id', 'http://localhost:3031', 'http://127.0.0.1:3031'],
+  origin: corsOrigins,
   credentials: true
 }));
 
@@ -115,11 +119,12 @@ const startServer = async () => {
     await createDirectories();
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT}`);
+      logger.info(`Local access: http://localhost:${PORT}`);
       logger.info(`Local access: http://127.0.0.1:${PORT}`);
-      logger.info(`Domain access: https://prafunschool.web.id`);
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🚀 Video Downloader & Uploader Server running on port ${PORT}`);
+      console.log(`🌐 Local: http://localhost:${PORT}`);
       console.log(`🌐 Local: http://127.0.0.1:${PORT}`);
-      console.log(`🌍 Domain: https://prafunschool.web.id`);
+      console.log(`🌍 Configure your domain in CORS_ORIGINS environment variable`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 # Base URL
 BASE_URL="http://localhost:3031"
 
-echo -e "${BLUE}🧪 Starting comprehensive feature testing...${NC}\n"
+echo -e "${BLUE}Starting comprehensive feature testing...${NC}\n"
 
 # Test counter
 TOTAL_TESTS=0
@@ -28,10 +28,10 @@ run_test() {
     result=$(eval "$command" 2>/dev/null)
     
     if echo "$result" | grep -q "$expected_pattern"; then
-        echo -e "${GREEN}✅ PASSED${NC}"
+        echo -e "${GREEN}PASSED${NC}"
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
-        echo -e "${RED}❌ FAILED${NC}"
+        echo -e "${RED}FAILED${NC}"
         echo -e "${RED}Expected pattern: $expected_pattern${NC}"
         echo -e "${RED}Got: $result${NC}"
     fi
@@ -113,15 +113,15 @@ run_test "JSON Response Format" \
     "curl -X POST $BASE_URL/api/auth/status -H 'Content-Type: application/json' -d '{}' -s | grep -o '\"success\":[^,}]*'" \
     "success.*true"
 
-echo -e "${BLUE}📊 Test Results Summary:${NC}"
+echo -e "${BLUE}Test Results Summary:${NC}"
 echo -e "${GREEN}Passed: $PASSED_TESTS${NC}"
 echo -e "${RED}Failed: $((TOTAL_TESTS - PASSED_TESTS))${NC}"
 echo -e "${BLUE}Total: $TOTAL_TESTS${NC}"
 
 if [ $PASSED_TESTS -eq $TOTAL_TESTS ]; then
-    echo -e "\n${GREEN}🎉 All tests passed! System is working correctly.${NC}"
+    echo -e "\n${GREEN}All tests passed! System is working correctly.${NC}"
     exit 0
 else
-    echo -e "\n${RED}⚠️  Some tests failed. Please check the issues above.${NC}"
+    echo -e "\n${RED}Some tests failed. Please check the issues above.${NC}"
     exit 1
 fi 
