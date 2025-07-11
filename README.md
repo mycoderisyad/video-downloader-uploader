@@ -62,7 +62,7 @@ After installation, you can use these scripts:
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/video-downloader-uploader.git
+git clone https://github.com/mycoderisyad/video-downloader-uploader.git
 cd video-downloader-uploader
 ```
 
@@ -377,15 +377,6 @@ NODE_ENV=development npm start
 - **Storage**: Temporary files auto-cleaned
 - **Network**: Depends on video sizes
 
-## Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 
@@ -397,17 +388,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Google APIs](https://developers.google.com/youtube) - YouTube integration
 - [Express.js](https://expressjs.com/) - Web framework
 - [Tailwind CSS](https://tailwindcss.com/) - UI styling
-
-## Documentation
-
-- **Setup Guide**: [CUSTOMIZATION.md](CUSTOMIZATION.md) - Complete customization guide
-- **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md) - Development guidelines  
-- **API Docs**: Available at `/api-docs` when server is running
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/video-downloader-uploader/issues)
-- **Documentation**: Check the files above and README
-- **Testing**: Run `./test-all-features.sh`
-
----

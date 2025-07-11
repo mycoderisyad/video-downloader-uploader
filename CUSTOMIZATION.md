@@ -272,4 +272,3 @@ If migrating from a hardcoded domain version:
 
 - **Issues**: Report issues on GitHub
 - **Documentation**: Check README.md
-- **Community**: Join discussions for help 
